@@ -84,7 +84,7 @@ private:
     }
 
     template <>
-    inline constexpr bool is_valid_type_list<>()
+    static inline constexpr bool is_valid_type_list<>()
     {
         return false;
     }

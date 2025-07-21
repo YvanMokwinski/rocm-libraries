@@ -40,7 +40,6 @@ set(ROCSPARSE_BENCHMARK_SOURCES
 )
 
 set(ROCSPARSE_CLIENTS_COMMON
-  ../common/rocsparse.cpp
   ../common/utility.cpp
   ../common/rocsparse_reproducibility.cpp
   ../common/rocsparse_reproducibility_test.cpp
@@ -176,9 +175,13 @@ set(ROCSPARSE_CLIENTS_TESTINGS
 ../testings/testing_v2_spmv_ell.cpp
 ../testings/testing_spsv_csr.cpp
 ../testings/testing_spsv_coo.cpp
+../testings/testing_sptrsv_csr.cpp
+../testings/testing_sptrsv_coo.cpp
 ../testings/testing_spitsv_csr.cpp
 ../testings/testing_spsm_csr.cpp
 ../testings/testing_spsm_coo.cpp
+../testings/testing_sptrsm_csr.cpp
+../testings/testing_sptrsm_coo.cpp
 ../testings/testing_sparse_to_dense_coo.cpp
 ../testings/testing_sparse_to_dense_csr.cpp
 ../testings/testing_sparse_to_dense_csc.cpp
