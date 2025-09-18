@@ -1,6 +1,6 @@
 /*! \file */
 /* ************************************************************************
-* Copyright (C) 2023 Advanced Micro Devices, Inc. All rights Reserved.
+* Copyright (C) 2023-2025 Advanced Micro Devices, Inc. All rights Reserved.
 *
 * Permission is hereby granted, free of charge, to any person obtaining a copy
 * of this software and associated documentation files (the "Software"), to deal
@@ -37,6 +37,7 @@
 #include "level2/rocsparse_csritsv.h"
 #include "level2/rocsparse_csrmv.h"
 #include "level2/rocsparse_csrsv.h"
+#include "level2/rocsparse_csrsv_strided_batched.h"
 #include "level2/rocsparse_ellmv.h"
 #include "level2/rocsparse_gebsrmv.h"
 #include "level2/rocsparse_gemvi.h"

@@ -174,6 +174,43 @@ rocsparse_csrsv_clear()
 
 .. doxygenfunction:: rocsparse_csrsv_clear
 
+rocsparse_csrsv_strided_batched_zero_pivot()
+--------------------------------------------
+
+.. doxygenfunction:: rocsparse_csrsv_strided_batched_zero_pivot
+
+rocsparse_csrsv_strided_batched_buffer_size()
+---------------------------------------------
+
+.. doxygenfunction:: rocsparse_scsrsv_strided_batched_buffer_size
+  :outline:
+.. doxygenfunction:: rocsparse_dcsrsv_strided_batched_buffer_size
+  :outline:
+.. doxygenfunction:: rocsparse_ccsrsv_strided_batched_buffer_size
+  :outline:
+.. doxygenfunction:: rocsparse_zcsrsv_strided_batched_buffer_size
+
+rocsparse_csrsv_strided_batched_analysis()
+------------------------------------------
+
+.. doxygenfunction:: rocsparse_scsrsv_strided_batched_analysis
+  :outline:
+.. doxygenfunction:: rocsparse_dcsrsv_strided_batched_analysis
+  :outline:
+.. doxygenfunction:: rocsparse_ccsrsv_strided_batched_analysis
+  :outline:
+.. doxygenfunction:: rocsparse_zcsrsv_strided_batched_analysis
+
+rocsparse_csrsv_strided_batched_solve()
+---------------------------------------
+
+.. doxygenfunction:: rocsparse_scsrsv_strided_batched_solve
+  :outline:
+.. doxygenfunction:: rocsparse_dcsrsv_strided_batched_solve
+  :outline:
+.. doxygenfunction:: rocsparse_ccsrsv_strided_batched_solve
+  :outline:
+.. doxygenfunction:: rocsparse_zcsrsv_strided_batched_solve
 
 rocsparse_csritsv_zero_pivot()
 ------------------------------

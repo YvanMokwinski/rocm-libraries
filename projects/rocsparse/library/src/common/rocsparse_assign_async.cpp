@@ -31,10 +31,27 @@ namespace rocsparse
     ROCSPARSE_KERNEL(1)
     void assign_kernel(T* dest, T value)
     {
-        *dest = value;
+        const uint32_t batch_index = blockIdx.y;
+        dest[batch_index]          = value;
     }
 
 }
+
+template <typename T>
+rocsparse_status rocsparse::assign_async(int64_t n, T* dest, T value, hipStream_t stream)
+{
+    // Use a kernel instead of memcpy, because memcpy is synchronous if the source is not in
+    // pinned memory.
+    // Memset lacks a 64bit option, but would involve a similar implicit kernel anyways.
+    RETURN_IF_HIPLAUNCHKERNELGGL_ERROR(
+        rocsparse::assign_kernel, dim3(1, n), dim3(1), 0, stream, dest, value);
+    return rocsparse_status_success;
+}
+
+template rocsparse_status
+    rocsparse::assign_async(int64_t n, int32_t* dest, int32_t value, hipStream_t stream);
+template rocsparse_status
+    rocsparse::assign_async(int64_t n, int64_t* dest, int64_t value, hipStream_t stream);
 
 template <typename T>
 rocsparse_status rocsparse::assign_async(T* dest, T value, hipStream_t stream)
@@ -43,10 +60,37 @@ rocsparse_status rocsparse::assign_async(T* dest, T value, hipStream_t stream)
     // pinned memory.
     // Memset lacks a 64bit option, but would involve a similar implicit kernel anyways.
     RETURN_IF_HIPLAUNCHKERNELGGL_ERROR(
-        rocsparse::assign_kernel, dim3(1), dim3(1), 0, stream, dest, value);
+        rocsparse::assign_kernel, dim3(1, 1), dim3(1), 0, stream, dest, value);
     return rocsparse_status_success;
 }
 
 template rocsparse_status rocsparse::assign_async(int32_t* dest, int32_t value, hipStream_t stream);
 
 template rocsparse_status rocsparse::assign_async(int64_t* dest, int64_t value, hipStream_t stream);
+
+rocsparse_status rocsparse::assign_max_async(int64_t             n,
+                                             rocsparse_indextype indextype,
+                                             void*               dest,
+                                             hipStream_t         stream)
+{
+    switch(indextype)
+    {
+    case rocsparse_indextype_i32:
+    {
+        RETURN_IF_ROCSPARSE_ERROR(rocsparse::assign_async(
+            n, reinterpret_cast<int32_t*>(dest), std::numeric_limits<int32_t>::max(), stream));
+        return rocsparse_status_success;
+    }
+    case rocsparse_indextype_i64:
+    {
+        RETURN_IF_ROCSPARSE_ERROR(rocsparse::assign_async(
+            n, reinterpret_cast<int64_t*>(dest), std::numeric_limits<int64_t>::max(), stream));
+        return rocsparse_status_success;
+    }
+    case rocsparse_indextype_u16:
+    {
+        break;
+    }
+    }
+    RETURN_IF_ROCSPARSE_ERROR(rocsparse_status_invalid_value);
+}

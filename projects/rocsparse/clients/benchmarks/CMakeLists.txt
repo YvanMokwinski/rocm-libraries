@@ -94,6 +94,7 @@ set(ROCSPARSE_CLIENTS_TESTINGS
 ../testings/testing_csrmv.cpp
 ../testings/testing_csrmv_managed.cpp
 ../testings/testing_csrsv.cpp
+../testings/testing_csrsv_strided_batched.cpp
 ../testings/testing_csritsv.cpp
 ../testings/testing_ellmv.cpp
 ../testings/testing_hybmv.cpp

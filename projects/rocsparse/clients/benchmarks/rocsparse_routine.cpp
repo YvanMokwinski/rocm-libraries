@@ -213,6 +213,7 @@ constexpr const char* rocsparse_routine::to_string() const
 #include "testing_csritsv.hpp"
 #include "testing_csrmv_managed.hpp"
 #include "testing_csrsv.hpp"
+#include "testing_csrsv_strided_batched.hpp"
 #include "testing_gebsrmv.hpp"
 #include "testing_gemvi.hpp"
 #include "testing_hybmv.hpp"
@@ -550,6 +551,7 @@ rocsparse_status rocsparse_routine::dispatch_call(const Arguments& arg)
         DEFINE_CASE_IJT_X(csrsm, testing_spsm_csr);
         DEFINE_CASE_T_FLOAT_ONLY(csrsort);
         DEFINE_CASE_IJT_X(csrsv, testing_spsv_csr);
+        DEFINE_CASE_T(csrsv_strided_batched);
         DEFINE_CASE_IJT_X(spitsv_csr, testing_spitsv_csr);
         DEFINE_CASE_T(csritsv);
         DEFINE_CASE_T(csr2dense);

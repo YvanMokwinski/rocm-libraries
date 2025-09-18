@@ -34,7 +34,7 @@
 #include "rocsparse_utility.hpp"
 
 #include "rocsparse_coosm.hpp"
-#include "rocsparse_csrsm.hpp"
+#include "rocsparse_csrsm_template.hpp"
 
 template <>
 const char* rocsparse::enum_utils::to_string(rocsparse_spsm_alg value_)

@@ -31,12 +31,15 @@
 #include "gthr_device.h"
 
 template <typename I, typename T>
-rocsparse_status rocsparse::gthr_template(rocsparse_handle     handle,
-                                          int64_t              nnz,
-                                          const void*          y,
-                                          void*                x_val,
-                                          const void*          x_ind,
-                                          rocsparse_index_base idx_base)
+rocsparse_status rocsparse::gthr_strided_batched_template(rocsparse_handle     handle,
+                                                          int64_t              batch_count,
+                                                          int64_t              nnz,
+                                                          const void*          y,
+                                                          int64_t              y_stride,
+                                                          void*                x_val,
+                                                          int64_t              x_val_stride,
+                                                          const void*          x_ind,
+                                                          rocsparse_index_base idx_base)
 {
     ROCSPARSE_ROUTINE_TRACE;
 
@@ -73,7 +76,7 @@ rocsparse_status rocsparse::gthr_template(rocsparse_handle     handle,
     hipStream_t stream = handle->stream;
 
 #define GTHR_DIM 512
-    dim3 gthr_blocks((nnz - 1) / GTHR_DIM + 1);
+    dim3 gthr_blocks((nnz - 1) / GTHR_DIM + 1, batch_count);
     dim3 gthr_threads(GTHR_DIM);
 
     RETURN_IF_HIPLAUNCHKERNELGGL_ERROR((rocsparse::gthr_kernel<GTHR_DIM, I, T>),
@@ -83,20 +86,25 @@ rocsparse_status rocsparse::gthr_template(rocsparse_handle     handle,
                                        stream,
                                        nnz,
                                        (const T*)y,
+                                       y_stride,
                                        (T*)x_val,
+                                       x_val_stride,
                                        (const I*)x_ind,
                                        idx_base);
 #undef GTHR_DIM
     return rocsparse_status_success;
 }
 
-#define INSTANTIATE(ITYPE, TTYPE)                                     \
-    template rocsparse_status rocsparse::gthr_template<ITYPE, TTYPE>( \
-        rocsparse_handle     handle,                                  \
-        int64_t              nnz,                                     \
-        const void*          y,                                       \
-        void*                x_val,                                   \
-        const void*          x_ind,                                   \
+#define INSTANTIATE(ITYPE, TTYPE)                                                     \
+    template rocsparse_status rocsparse::gthr_strided_batched_template<ITYPE, TTYPE>( \
+        rocsparse_handle     handle,                                                  \
+        int64_t              batch_count,                                             \
+        int64_t              nnz,                                                     \
+        const void*          y,                                                       \
+        int64_t              y_stride,                                                \
+        void*                x_val,                                                   \
+        int64_t              x_val_stride,                                            \
+        const void*          x_ind,                                                   \
         rocsparse_index_base idx_base);
 
 INSTANTIATE(int32_t, uint8_t)

@@ -28,8 +28,13 @@ set(rocsparse_source
   src/auxiliary/rocsparse_auxiliary.cpp
   src/auxiliary/rocsparse_error.cpp
 
+
 # Common
   src/common/rocsparse_common.cpp
+  src/common/rocsparse_valset.cpp
+  src/common/rocsparse_conjugate.cpp
+  src/common/rocsparse_dense_transpose_back.cpp
+  src/common/rocsparse_dense_transpose.cpp
   src/common/rocsparse_handle.cpp
   src/common/rocsparse_mat_info.cpp
   src/common/rocsparse_trm_info.cpp
@@ -120,9 +125,22 @@ set(rocsparse_source
   src/level2/rocsparse_ellmv.cpp
   #
   src/level2/rocsparse_csrsv.cpp
-  src/level2/rocsparse_csrsv_analysis.cpp
+  src/level2/rocsparse_xcsrsv_buffer_size.cpp
+  src/level2/rocsparse_xcsrsv_analysis.cpp
+  src/level2/rocsparse_xcsrsv_solve.cpp
   src/level2/rocsparse_csrsv_buffer_size.cpp
+  src/level2/rocsparse_csrsv_analysis.cpp
   src/level2/rocsparse_csrsv_solve.cpp
+  src/level2/rocsparse_csrsv_strided_batched_buffer_size.cpp
+  src/level2/rocsparse_csrsv_strided_batched_analysis.cpp
+  src/level2/rocsparse_csrsv_strided_batched_solve.cpp
+  src/level2/rocsparse_csrsv_strided_batched_buffer_size_impl.cpp
+  src/level2/rocsparse_csrsv_strided_batched_analysis_impl.cpp
+  src/level2/rocsparse_csrsv_strided_batched_analysis_kernels.cpp
+  src/level2/rocsparse_csrsv_strided_batched_solve_impl.cpp
+  src/level2/rocsparse_csrsv_strided_batched_zero_pivot_impl.cpp
+  src/level2/rocsparse_csrsv_strided_batched_kernels.cpp
+  #
   src/level2/rocsparse_csritsv.cpp
   src/level2/rocsparse_csritsv_info.cpp
   src/level2/rocsparse_csritsv_buffer_size.cpp
@@ -355,8 +373,20 @@ set(rocsparse_source
   src/level3/rocsparse_spmm.cpp
   src/level3/rocsparse_csrsm.cpp
   src/level3/rocsparse_csrsm_buffer_size.cpp
+  src/level3/rocsparse_xcsrsm_buffer_size.cpp
   src/level3/rocsparse_csrsm_analysis.cpp
+  src/level3/rocsparse_xcsrsm_analysis.cpp
   src/level3/rocsparse_csrsm_solve.cpp
+  src/level3/rocsparse_xcsrsm_solve.cpp
+  src/level3/rocsparse_csrsm_solve_copy_y_to_B.cpp
+  src/level3/rocsparse_csrsm_strided_batched_buffer_size.cpp
+  src/level3/rocsparse_csrsm_strided_batched_analysis.cpp
+  src/level3/rocsparse_csrsm_strided_batched_solve.cpp
+  src/level3/rocsparse_csrsm_strided_batched_buffer_size_impl.cpp
+  src/level3/rocsparse_csrsm_strided_batched_analysis_impl.cpp
+  src/level3/rocsparse_csrsm_strided_batched_solve_impl.cpp
+  src/level3/rocsparse_csrsm_strided_batched_solve_kernel.cpp
+  src/level3/rocsparse_csrsm_solve_kernel.cpp
   src/level3/rocsparse_coosm_buffer_size.cpp
   src/level3/rocsparse_coosm_analysis.cpp
   src/level3/rocsparse_coosm.cpp

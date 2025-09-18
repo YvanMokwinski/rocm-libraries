@@ -372,7 +372,7 @@ Subroutine                         Shares metadata with
 
 .. note::
 
-   This functionality can be further expanded on rocSPARSE extensions to significantly improve metadata collection performance.
+   This functionality can be further expanded on rocSPARSE extensions to significantly improve metadata collection performance. The strided batched version of a routine, for instance :cpp:func:`rocsparse_scsrsv_strided_batched_solve`, can be considered as the non-batched version :cpp:func:`rocsparse_scsrsv_solve` in the table above.
 
 .. _rocsparse_clients:
 

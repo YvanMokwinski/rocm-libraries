@@ -49,9 +49,42 @@ struct csx_matrix
     array_t<I>                           ptr{};
     array_t<J>                           ind{};
     array_t<T>                           val{};
-
+    int64_t                              batch_count{1};
+    int64_t                              val_stride{};
     csx_matrix(){};
     ~csx_matrix(){};
+
+    void set_strided_batched(int64_t batch_count_, int64_t val_stride_)
+    {
+        ROCSPARSE_CLIENTS_ROUTINE_TRACE;
+        this->batch_count = batch_count_;
+        this->val_stride  = val_stride_;
+        void* s;
+        CHECK_HIP_THROW_ERROR(hipMalloc(&s, this->nnz * sizeof(T)));
+        CHECK_HIP_THROW_ERROR(hipMemcpy(s, this->val, this->nnz * sizeof(T), hipMemcpyDefault));
+        val.resize(this->batch_count * this->val_stride);
+
+        switch(MODE)
+        {
+        case memory_mode::host:
+        case memory_mode::managed:
+        {
+            memset(val, 0, val.size() * sizeof(T));
+            break;
+        }
+        case memory_mode::device:
+        {
+            CHECK_HIP_THROW_ERROR(hipMemset(val, 0, val.size() * sizeof(T)));
+            break;
+        }
+        }
+        for(int64_t i = 0; i < this->batch_count; ++i)
+        {
+            CHECK_HIP_THROW_ERROR(hipMemcpy(
+                this->val + i * this->val_stride, s, this->nnz * sizeof(T), hipMemcpyDefault));
+        }
+        CHECK_HIP_THROW_ERROR(hipFree(s));
+    }
 
     csx_matrix(J m_, J n_, I nnz_, rocsparse_index_base base_)
         : m(m_)
@@ -72,6 +105,8 @@ struct csx_matrix
         {
             this->transfer_from(that_);
         }
+        this->batch_count = that_.batch_count;
+        this->val_stride  = this->nnz;
     }
 
     template <memory_mode::value_t THAT_MODE>
@@ -85,6 +120,8 @@ struct csx_matrix
         {
             this->transfer_from(that_);
         }
+        this->batch_count = that_.batch_count;
+        this->val_stride  = this->nnz;
     }
 
     rocsparse_status scale()
@@ -97,26 +134,27 @@ struct csx_matrix
         case memory_mode::managed:
         {
             const I nsequences = (DIRECTION == rocsparse_direction_row) ? this->m : this->n;
-            for(I i = 0; i < nsequences; ++i)
-            {
-                const I            end = this->ptr[i + 1] - this->base;
-                floating_data_t<T> mx  = static_cast<floating_data_t<T>>(0);
-                for(I k = this->ptr[i] - this->base; k < end; ++k)
+            for(I j = 0; j < this->batch_count; ++j)
+                for(I i = 0; i < nsequences; ++i)
                 {
-                    mx = std::max(mx, std::abs(this->val[k]));
-                }
+                    const I            end = this->ptr[i + 1] - this->base;
+                    floating_data_t<T> mx  = static_cast<floating_data_t<T>>(0);
+                    for(I k = this->ptr[i] - this->base; k < end; ++k)
+                    {
+                        mx = std::max(mx, std::abs(this->val[k + j * this->val_stride]));
+                    }
 
-                if(mx == floating_data_t<T>(0))
-                {
-                    mx = floating_data_t<T>(1);
-                }
+                    if(mx == floating_data_t<T>(0))
+                    {
+                        mx = floating_data_t<T>(1);
+                    }
 
-                mx = floating_data_t<T>(1.0) / mx;
-                for(I k = this->ptr[i] - this->base; k < end; ++k)
-                {
-                    this->val[k] *= mx;
+                    mx = floating_data_t<T>(1.0) / mx;
+                    for(I k = this->ptr[i] - this->base; k < end; ++k)
+                    {
+                        this->val[k + j * this->val_stride] *= mx;
+                    }
                 }
-            }
 
             return rocsparse_status_success;
         }
@@ -173,6 +211,8 @@ struct csx_matrix
         std::cout << " n    : " << this->n << std::endl;
         std::cout << " nnz  : " << this->nnz << std::endl;
         std::cout << " base : " << this->base << std::endl;
+        std::cout << " batch_count : " << this->batch_count << std::endl;
+        std::cout << " val_stride  : " << this->val_stride << std::endl;
     }
 
     void print() const
@@ -257,7 +297,7 @@ struct csx_matrix
 
         if(this->ind.size() != this->nnz)
             return true;
-        if(this->val.size() != this->nnz)
+        if(this->val.size() < this->nnz * this->batch_count)
             return true;
         return false;
     };
@@ -267,7 +307,8 @@ struct csx_matrix
     {
         ROCSPARSE_CLIENTS_ROUTINE_TRACE;
 
-        CHECK_HIP_THROW_ERROR((this->m == that.m && this->n == that.n && this->nnz == that.nnz
+        CHECK_HIP_THROW_ERROR((this->batch_count == that.batch_count && this->m == that.m
+                               && this->n == that.n && this->nnz == that.nnz
                                && this->dir == that.dir && this->base == that.base)
                                   ? hipSuccess
                                   : hipErrorInvalidValue);

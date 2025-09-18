@@ -85,6 +85,7 @@ set(ROCSPARSE_TEST_SOURCES
   test_csrmv.cpp
   test_csrmv_managed.cpp
   test_csrsv.cpp
+  test_csrsv_strided_batched.cpp
   test_csritsv.cpp
   test_ellmv.cpp
   test_hybmv.cpp
@@ -227,6 +228,7 @@ set(ROCSPARSE_CLIENTS_TESTINGS
 ../testings/testing_csrmv.cpp
 ../testings/testing_csrmv_managed.cpp
 ../testings/testing_csrsv.cpp
+../testings/testing_csrsv_strided_batched.cpp
 ../testings/testing_csritsv.cpp
 ../testings/testing_ellmv.cpp
 ../testings/testing_hybmv.cpp
