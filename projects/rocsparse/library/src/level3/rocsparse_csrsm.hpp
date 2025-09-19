@@ -25,9 +25,10 @@
 #pragma once
 
 #include "rocsparse_control.hpp"
+
+#include "rocsparse_csrsm_info.hpp"
 #include "rocsparse_datatype_utils.hpp"
 #include "rocsparse_indextype_utils.hpp"
-
 namespace rocsparse
 {
 
@@ -76,6 +77,7 @@ namespace rocsparse
                                     rocsparse_mat_info        info,
                                     rocsparse_analysis_policy analysis,
                                     rocsparse_solve_policy    solve,
+                                    rocsparse_csrsm_info*     p_csrsm_info,
                                     void*                     temp_buffer);
 
     rocsparse_status csrsm_solve(rocsparse_handle          handle,
@@ -99,6 +101,7 @@ namespace rocsparse
                                  rocsparse_order           order_B,
                                  const rocsparse_mat_info  info,
                                  rocsparse_solve_policy    policy,
+                                 rocsparse_csrsm_info      csrsm_info,
                                  void*                     temp_buffer);
 
 }

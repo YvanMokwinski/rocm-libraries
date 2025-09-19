@@ -21,6 +21,7 @@
  * THE SOFTWARE.
  *
  * ************************************************************************ */
+
 #include "internal/level2/rocsparse_csrsv.h"
 #include "rocsparse_control.hpp"
 #include "rocsparse_csrsv.hpp"
@@ -72,8 +73,8 @@ namespace rocsparse
         ROCSPARSE_CHECKARG_ARRAY(14, accept_temp_buffer, temp_buffer);
         return rocsparse_status_success;
     }
-
 }
+
 rocsparse_status rocsparse::csrsv_analysis(rocsparse_handle          handle,
                                            rocsparse_operation       trans,
                                            int64_t                   m,
@@ -88,6 +89,7 @@ rocsparse_status rocsparse::csrsv_analysis(rocsparse_handle          handle,
                                            rocsparse_mat_info        info,
                                            rocsparse_analysis_policy analysis,
                                            rocsparse_solve_policy    solve,
+                                           rocsparse_csrsv_info*     p_csrsv_info,
                                            void*                     temp_buffer)
 {
     ROCSPARSE_ROUTINE_TRACE;
@@ -123,6 +125,7 @@ rocsparse_status rocsparse::csrsv_analysis(rocsparse_handle          handle,
                                                                         info,
                                                                         analysis,
                                                                         solve,
+                                                                        p_csrsv_info,
                                                                         temp_buffer));
 
     return rocsparse_status_success;

@@ -1,6 +1,6 @@
 /*! \file */
 /* ************************************************************************
- * Copyright (C) 2018-2025 Advanced Micro Devices, Inc. All rights Reserved.
+ * Copyright (C) 2025 Advanced Micro Devices, Inc. All rights Reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -22,11 +22,12 @@
  *
  * ************************************************************************ */
 
-#include "internal/level2/rocsparse_csrsv.h"
-#include "rocsparse_control.hpp"
 #include "rocsparse_csrsv.hpp"
+
 #include "rocsparse_csrsv_strided_batched.hpp"
 #include "rocsparse_utility.hpp"
+#include <map>
+#include <sstream>
 
 /*
  * ===========================================================================
@@ -68,7 +69,6 @@ namespace rocsparse
         ROCSPARSE_CHECKARG_POINTER(12, buffer_size);
         return rocsparse_status_success;
     }
-
 }
 
 rocsparse_status rocsparse::csrsv_buffer_size(rocsparse_handle          handle,
@@ -85,6 +85,7 @@ rocsparse_status rocsparse::csrsv_buffer_size(rocsparse_handle          handle,
                                               rocsparse_mat_info        info,
                                               size_t*                   buffer_size)
 {
+
     ROCSPARSE_ROUTINE_TRACE;
     RETURN_IF_ROCSPARSE_ERROR(rocsparse::csrsv_buffer_size_checkarg(handle,
                                                                     trans,

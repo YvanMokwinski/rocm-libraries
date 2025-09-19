@@ -1,6 +1,6 @@
 /*! \file */
 /* ************************************************************************
- * Copyright (C) 2020-2025 Advanced Micro Devices, Inc. All rights Reserved.
+ * Copyright (C) 2025 Advanced Micro Devices, Inc. All rights Reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -48,6 +48,7 @@ rocsparse_status rocsparse::csrsm_analysis(rocsparse_handle          handle,
                                            rocsparse_mat_info        info,
                                            rocsparse_analysis_policy analysis,
                                            rocsparse_solve_policy    solve,
+                                           rocsparse_csrsm_info*     p_csrsm_info,
                                            void*                     temp_buffer)
 {
     ROCSPARSE_ROUTINE_TRACE;
@@ -78,6 +79,7 @@ rocsparse_status rocsparse::csrsm_analysis(rocsparse_handle          handle,
                                                                         info,
                                                                         analysis,
                                                                         solve,
+                                                                        p_csrsm_info,
                                                                         temp_buffer));
     return rocsparse_status_success;
 }

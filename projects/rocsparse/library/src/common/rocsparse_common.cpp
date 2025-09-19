@@ -342,6 +342,7 @@ rocsparse_status rocsparse::copy_and_scale(
                                                    TTYPE            value,  \
                                                    TTYPE*           array,  \
                                                    rocsparse_order  order);
+
 INSTANTIATE(int32_t, _Float16);
 INSTANTIATE(int32_t, rocsparse_bfloat16);
 INSTANTIATE(int32_t, float);
@@ -378,15 +379,15 @@ INSTANTIATE(int64_t, rocsparse_float_complex, rocsparse_float_complex);
 INSTANTIATE(int64_t, rocsparse_double_complex, rocsparse_double_complex);
 #undef INSTANTIATE
 
-#define INSTANTIATE(ITYPE, TTYPE)                                                            \
+#define INSTANTIATE(I, T)                                                                    \
     template rocsparse_status rocsparse::scale_2d_array(rocsparse_handle handle,             \
-                                                        ITYPE            m,                  \
-                                                        ITYPE            n,                  \
+                                                        I                m,                  \
+                                                        I                n,                  \
                                                         int64_t          ld,                 \
                                                         int64_t          batch_count,        \
                                                         int64_t          stride,             \
-                                                        const TTYPE*     scalar_device_host, \
-                                                        TTYPE*           array,              \
+                                                        const T*         scalar_device_host, \
+                                                        T*               array,              \
                                                         rocsparse_order  order);
 
 INSTANTIATE(int32_t, _Float16);
@@ -404,11 +405,11 @@ INSTANTIATE(int64_t, rocsparse_float_complex);
 INSTANTIATE(int64_t, rocsparse_double_complex);
 #undef INSTANTIATE
 
-#define INSTANTIATE(ITYPE, JTYPE)                                               \
+#define INSTANTIATE(I, J)                                                       \
     template rocsparse_status rocsparse::copy(rocsparse_handle     handle,      \
                                               int64_t              length,      \
-                                              const ITYPE*         in,          \
-                                              JTYPE*               out,         \
+                                              const I*             in,          \
+                                              J*                   out,         \
                                               rocsparse_index_base idx_base_in, \
                                               rocsparse_index_base idx_base_out);
 
@@ -419,12 +420,12 @@ INSTANTIATE(int64_t, int64_t);
 
 #undef INSTANTIATE
 
-#define INSTANTIATE(TTYPE)                                                       \
+#define INSTANTIATE(T)                                                           \
     template rocsparse_status rocsparse::copy_and_scale(rocsparse_handle handle, \
                                                         int64_t          length, \
-                                                        const TTYPE*     in,     \
-                                                        TTYPE*           out,    \
-                                                        const TTYPE*     scalar_device_host);
+                                                        const T*         in,     \
+                                                        T*               out,    \
+                                                        const T*         scalar_device_host);
 
 INSTANTIATE(float);
 INSTANTIATE(double);

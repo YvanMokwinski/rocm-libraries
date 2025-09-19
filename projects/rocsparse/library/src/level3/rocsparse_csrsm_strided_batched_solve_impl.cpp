@@ -97,6 +97,7 @@ rocsparse_status
                                            const int64_t                B_stride,
                                            const rocsparse_order        order_B,
                                            const rocsparse_mat_info     info,
+                                           rocsparse_csrsm_info         csrsm_info,
                                            const rocsparse_solve_policy policy,
                                            void*                        temp_buffer)
 {
@@ -252,18 +253,16 @@ rocsparse_status
 
     const int64_t done_array_stride = m * narrays;
 
-    const rocsparse::trm_info_t* csrsm_info
-        = (descr->fill_mode == rocsparse_fill_mode_upper)
-              ? ((trans_A == rocsparse_operation_none) ? info->csrsm_upper_info
-                                                       : info->csrsmt_upper_info)
-              : ((trans_A == rocsparse_operation_none) ? info->csrsm_lower_info
-                                                       : info->csrsmt_lower_info);
+    const rocsparse::trm_info_t* trm_info = csrsm_info->get(trans_A, descr->fill_mode);
 
     // If diag type is unit, re-initialize zero pivot to remove structural zeros
     if(descr->diag_type == rocsparse_diag_type_unit)
     {
-        RETURN_IF_ROCSPARSE_ERROR(rocsparse::assign_max_async(
-            batch_count, csr_col_ind_indextype, info->zero_pivot, stream));
+        RETURN_IF_ROCSPARSE_ERROR(
+            rocsparse::assign_max_async(batch_count,
+                                        csr_col_ind_indextype,
+                                        reinterpret_cast<J*>(csrsm_info->get_zero_pivot()),
+                                        stream));
     }
 
     // Leading dimension
@@ -376,7 +375,7 @@ rocsparse_status
                                             done_array,
                                             done_array_stride,
                                             csrsm_info->get_row_map(),
-                                            info->zero_pivot,
+                                            csrsm_info->get_zero_pivot(),
                                             static_cast<int64_t>(1),
                                             descr->base,
                                             fill_mode,

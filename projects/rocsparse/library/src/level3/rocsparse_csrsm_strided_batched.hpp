@@ -83,6 +83,7 @@ namespace rocsparse
                                                     rocsparse_mat_info        info,
                                                     rocsparse_analysis_policy analysis,
                                                     rocsparse_solve_policy    solve,
+                                                    rocsparse_csrsm_info*     p_csrsm_info,
                                                     void*                     temp_buffer);
 
     rocsparse_status csrsm_strided_batched_solve(rocsparse_handle          handle,
@@ -109,6 +110,7 @@ namespace rocsparse
                                                  int64_t                   B_stride,
                                                  rocsparse_order           order_B,
                                                  const rocsparse_mat_info  info,
+                                                 rocsparse_csrsm_info      csrsm_info,
                                                  rocsparse_solve_policy    policy,
                                                  void*                     temp_buffer);
 }

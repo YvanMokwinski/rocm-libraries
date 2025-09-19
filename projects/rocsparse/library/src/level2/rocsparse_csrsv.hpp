@@ -133,18 +133,19 @@ namespace rocsparse
     }
 
     template <typename I, typename J, typename T>
-    rocsparse_status csrsv_analysis_template(rocsparse_handle          handle,
-                                             rocsparse_operation       trans,
-                                             J                         m,
-                                             I                         nnz,
-                                             const rocsparse_mat_descr descr,
-                                             const T*                  csr_val,
-                                             const I*                  csr_row_ptr,
-                                             const J*                  csr_col_ind,
-                                             rocsparse_mat_info        info,
-                                             rocsparse_analysis_policy analysis,
-                                             rocsparse_solve_policy    solve,
-                                             void*                     temp_buffer)
+    inline rocsparse_status csrsv_analysis_template(rocsparse_handle          handle,
+                                                    rocsparse_operation       trans,
+                                                    int64_t                   m,
+                                                    int64_t                   nnz,
+                                                    const rocsparse_mat_descr descr,
+                                                    const void*               csr_val,
+                                                    const void*               csr_row_ptr,
+                                                    const void*               csr_col_ind,
+                                                    rocsparse_mat_info        info,
+                                                    rocsparse_analysis_policy analysis,
+                                                    rocsparse_solve_policy    solve,
+                                                    rocsparse_csrsv_info*     p_csrsv_info,
+                                                    void*                     temp_buffer)
     {
         RETURN_IF_ROCSPARSE_ERROR(rocsparse::csrsv_analysis(handle,
                                                             trans,
@@ -160,21 +161,22 @@ namespace rocsparse
                                                             info,
                                                             analysis,
                                                             solve,
+                                                            p_csrsv_info,
                                                             temp_buffer));
         return rocsparse_status_success;
     }
 
     template <typename I, typename J, typename T>
-    rocsparse_status csrsv_buffer_size_template(rocsparse_handle          handle,
-                                                rocsparse_operation       trans,
-                                                J                         m,
-                                                I                         nnz,
-                                                const rocsparse_mat_descr descr,
-                                                const T*                  csr_val,
-                                                const I*                  csr_row_ptr,
-                                                const J*                  csr_col_ind,
-                                                rocsparse_mat_info        info,
-                                                size_t*                   buffer_size)
+    inline rocsparse_status csrsv_buffer_size_template(rocsparse_handle          handle,
+                                                       rocsparse_operation       trans,
+                                                       J                         m,
+                                                       I                         nnz,
+                                                       const rocsparse_mat_descr descr,
+                                                       const T*                  csr_val,
+                                                       const I*                  csr_row_ptr,
+                                                       const J*                  csr_col_ind,
+                                                       rocsparse_mat_info        info,
+                                                       size_t*                   buffer_size)
     {
         RETURN_IF_ROCSPARSE_ERROR(rocsparse::csrsv_buffer_size(handle,
                                                                trans,
@@ -193,21 +195,22 @@ namespace rocsparse
     }
 
     template <typename I, typename J, typename T>
-    rocsparse_status csrsv_solve_template(rocsparse_handle          handle,
-                                          rocsparse_operation       trans,
-                                          J                         m,
-                                          I                         nnz,
-                                          const T*                  alpha,
-                                          const rocsparse_mat_descr descr,
-                                          const T*                  csr_val,
-                                          const I*                  csr_row_ptr,
-                                          const J*                  csr_col_ind,
-                                          rocsparse_mat_info        info,
-                                          const T*                  x,
-                                          int64_t                   x_inc,
-                                          T*                        y,
-                                          rocsparse_solve_policy    policy,
-                                          void*                     temp_buffer)
+    inline rocsparse_status csrsv_solve_template(rocsparse_handle          handle,
+                                                 rocsparse_operation       trans,
+                                                 int64_t                   m,
+                                                 int64_t                   nnz,
+                                                 const void*               alpha,
+                                                 const rocsparse_mat_descr descr,
+                                                 const void*               csr_val,
+                                                 const void*               csr_row_ptr,
+                                                 const void*               csr_col_ind,
+                                                 rocsparse_mat_info        info,
+                                                 const void*               x,
+                                                 int64_t                   x_inc,
+                                                 void*                     y,
+                                                 rocsparse_solve_policy    policy,
+                                                 rocsparse_csrsv_info      csrsv_info,
+                                                 void*                     temp_buffer)
     {
         RETURN_IF_ROCSPARSE_ERROR(rocsparse::csrsv_solve(handle,
                                                          trans,
@@ -229,7 +232,9 @@ namespace rocsparse
                                                          rocsparse::get_datatype<T>(),
                                                          y,
                                                          policy,
+                                                         csrsv_info,
                                                          temp_buffer));
         return rocsparse_status_success;
     }
+
 }

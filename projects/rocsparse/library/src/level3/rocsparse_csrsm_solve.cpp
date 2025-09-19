@@ -1,6 +1,6 @@
 /*! \file */
 /* ************************************************************************
- * Copyright (C) 2020-2025 Advanced Micro Devices, Inc. All rights Reserved.
+ * Copyright (C) 2025 Advanced Micro Devices, Inc. All rights Reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -21,6 +21,7 @@
  * THE SOFTWARE.
  *
  * ************************************************************************ */
+
 #include "rocsparse_csrsm.hpp"
 #include "rocsparse_csrsm_strided_batched.hpp"
 #include "rocsparse_utility.hpp"
@@ -45,6 +46,7 @@ rocsparse_status rocsparse::csrsm_solve(rocsparse_handle             handle,
                                         const int64_t                ldb,
                                         const rocsparse_order        order_B,
                                         const rocsparse_mat_info     info,
+                                        rocsparse_csrsm_info         csrsm_info,
                                         const rocsparse_solve_policy policy,
                                         void*                        temp_buffer)
 {
@@ -73,6 +75,7 @@ rocsparse_status rocsparse::csrsm_solve(rocsparse_handle             handle,
                                                                      static_cast<int64_t>(0),
                                                                      order_B,
                                                                      info,
+                                                                     csrsm_info,
                                                                      policy,
                                                                      temp_buffer));
     return rocsparse_status_success;
