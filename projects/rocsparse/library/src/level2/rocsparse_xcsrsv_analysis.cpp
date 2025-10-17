@@ -97,22 +97,31 @@ namespace rocsparse
             RETURN_IF_ROCSPARSE_ERROR(status);
             return rocsparse_status_success;
         }
-        RETURN_IF_ROCSPARSE_ERROR(
-            rocsparse::csrsv_analysis(handle,
-                                      trans,
-                                      m,
-                                      nnz,
-                                      descr,
-                                      rocsparse::get_datatype<T>(),
-                                      csr_val,
-                                      rocsparse::get_indextype<rocsparse_int>(),
-                                      csr_row_ptr,
-                                      rocsparse::get_indextype<rocsparse_int>(),
-                                      csr_col_ind,
-                                      info,
-                                      analysis,
-                                      solve,
-                                      temp_buffer));
+
+        rocsparse_csrsv_info   csrsv_info = (info != nullptr) ? info->get_csrsv_info() : nullptr;
+        _rocsparse_spmat_descr csr(rocsparse_format_csr,
+                                   false,
+                                   static_cast<int64_t>(1),
+                                   m,
+                                   m,
+                                   nnz,
+                                   rocsparse::get_datatype<T>(),
+                                   csr_val,
+                                   nullptr,
+                                   static_cast<int64_t>(0),
+                                   rocsparse::get_indextype<rocsparse_int>(),
+                                   csr_row_ptr,
+                                   nullptr,
+                                   static_cast<int64_t>(0),
+                                   rocsparse::get_indextype<rocsparse_int>(),
+                                   csr_col_ind,
+                                   nullptr,
+                                   static_cast<int64_t>(0),
+                                   descr->base,
+                                   descr,
+                                   info);
+        RETURN_IF_ROCSPARSE_ERROR(rocsparse::csrsv_analysis(
+            handle, trans, &csr, analysis, solve, &csrsv_info, temp_buffer));
 
         return rocsparse_status_success;
     }

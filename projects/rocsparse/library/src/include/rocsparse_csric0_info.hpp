@@ -32,5 +32,6 @@ struct _rocsparse_csric0_info : rocsparse::trm_data_t, rocsparse::singular_info_
 public:
     ~_rocsparse_csric0_info();
     void copy(const _rocsparse_csric0_info* that, hipStream_t stream);
+    void set_batch_count(int64_t value, hipStream_t stream);
 };
 typedef _rocsparse_csric0_info* rocsparse_csric0_info;

@@ -152,6 +152,7 @@ try
                                                             solve,
                                                             temp_buffer));
 
+    rocsparse_csrsm_info csrsm_info = info->get_csrsm_info();
     RETURN_IF_ROCSPARSE_ERROR(rocsparse::csrsm_strided_batched_analysis(handle,
                                                                         trans_A,
                                                                         trans_B,
@@ -160,7 +161,6 @@ try
                                                                         nrhs,
                                                                         nnz,
                                                                         alpha_datatype,
-                                                                        alpha,
                                                                         alpha_stride,
                                                                         descr,
                                                                         csr_val_datatype,
@@ -178,6 +178,7 @@ try
                                                                         info,
                                                                         analysis,
                                                                         solve,
+                                                                        &csrsm_info,
                                                                         temp_buffer));
     return rocsparse_status_success;
 }

@@ -42,8 +42,8 @@ namespace rocsparse
                                      rocsparse_index_base idx_base,
                                      rocsparse_diag_type  diag_type)
     {
-        int lid = hipThreadIdx_x & (WF_SIZE - 1);
-        int wid = hipThreadIdx_x / WF_SIZE;
+        const uint32_t lid = hipThreadIdx_x & (WF_SIZE - 1);
+        const uint32_t wid = hipThreadIdx_x / WF_SIZE;
 
         // First row in this block
         J first_row = hipBlockIdx_x * (BLOCKSIZE / WF_SIZE);
@@ -52,7 +52,7 @@ namespace rocsparse
         J row = first_row + wid;
 
         // Shared memory to set done flag for intra-block dependencies
-        __shared__ int local_done_array[BLOCKSIZE / WF_SIZE];
+        __shared__ int32_t local_done_array[BLOCKSIZE / WF_SIZE];
 
         // Initialize local done array
         local_done_array[wid] = 0;
@@ -73,7 +73,7 @@ namespace rocsparse
         }
 
         // Local depth
-        int local_max = 0;
+        int32_t local_max = 0;
 
         I row_begin = csr_row_ptr[row] - idx_base;
         I row_end   = csr_row_ptr[row + 1] - idx_base;
@@ -99,7 +99,7 @@ namespace rocsparse
 
             // While there are threads in this workgroup that have been unable to
             // get their input, loop and wait for the flag to exist.
-            const int local_done
+            const int32_t local_done
                 = rocsparse::spin_loop<SLEEP>(&done_array[local_col], __HIP_MEMORY_SCOPE_AGENT);
 
             // Local maximum
@@ -119,7 +119,7 @@ namespace rocsparse
             if(local_col < row)
             {
                 // Index into shared memory to query for done flag
-                const int local_done = rocsparse::spin_loop<SLEEP>(
+                const int32_t local_done = rocsparse::spin_loop<SLEEP>(
                     &local_done_array[local_col - first_row], __HIP_MEMORY_SCOPE_WORKGROUP);
                 local_max = rocsparse::max(local_done, local_max);
             }
@@ -165,8 +165,8 @@ namespace rocsparse
                                      rocsparse_index_base idx_base,
                                      rocsparse_diag_type  diag_type)
     {
-        int lid = hipThreadIdx_x & (WF_SIZE - 1);
-        int wid = hipThreadIdx_x / WF_SIZE;
+        const uint32_t lid = hipThreadIdx_x & (WF_SIZE - 1);
+        const uint32_t wid = hipThreadIdx_x / WF_SIZE;
 
         // Last row in this block
         J last_row = m - 1 - hipBlockIdx_x * (BLOCKSIZE / WF_SIZE);
@@ -175,7 +175,7 @@ namespace rocsparse
         J row = last_row - wid;
 
         // Shared memory to set done flag for intra-block dependencies
-        __shared__ int local_done_array[BLOCKSIZE / WF_SIZE];
+        __shared__ int32_t local_done_array[BLOCKSIZE / WF_SIZE];
 
         // Initialize local done array
         local_done_array[wid] = 0;
@@ -196,7 +196,7 @@ namespace rocsparse
         }
 
         // Local depth
-        int local_max = 0;
+        int32_t local_max = 0;
 
         I row_begin = csr_row_ptr[row] - idx_base;
         I row_end   = csr_row_ptr[row + 1] - idx_base;
@@ -222,7 +222,7 @@ namespace rocsparse
 
             // While there are threads in this workgroup that have been unable to
             // get their input, loop and wait for the flag to exist.
-            const int local_done
+            const int32_t local_done
                 = rocsparse::spin_loop<SLEEP>(&done_array[local_col], __HIP_MEMORY_SCOPE_AGENT);
             // Local maximum
             local_max = rocsparse::max(local_done, local_max);
@@ -241,7 +241,7 @@ namespace rocsparse
             if(local_col > row)
             {
                 // Index into shared memory to query for done flag
-                const int local_done = rocsparse::spin_loop<SLEEP>(
+                const int32_t local_done = rocsparse::spin_loop<SLEEP>(
                     &local_done_array[last_row - local_col], __HIP_MEMORY_SCOPE_WORKGROUP);
                 local_max = rocsparse::max(local_done, local_max);
             }

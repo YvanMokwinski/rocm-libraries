@@ -32,10 +32,14 @@ namespace rocsparse
     {
     protected:
         rocsparse_indextype m_position_indextype{};
+        int64_t             m_batch_count{};
         void*               m_position{};
         position_t();
 
-        void copy_value(hipStream_t stream, rocsparse_pointer_mode mode, int64_t* value) const;
+        void copy_value(hipStream_t            stream,
+                        rocsparse_pointer_mode mode,
+                        int64_t                batch_index,
+                        int64_t*               value) const;
 
         void copy_async(hipStream_t            stream,
                         rocsparse_pointer_mode mode,
@@ -44,20 +48,24 @@ namespace rocsparse
 
         ~position_t();
 
-        void create_position_async(rocsparse_indextype indextype, hipStream_t stream);
+        void create_position_async(int64_t             batch_count,
+                                   rocsparse_indextype indextype,
+                                   hipStream_t         stream);
+
         void free_position_async(hipStream_t stream);
 
         rocsparse_indextype get_position_indextype() const;
         const void*         get_position() const;
         void*               get_position();
-
-        rocsparse_status copy_position_async(rocsparse_pointer_mode pointer_mode,
-                                             rocsparse_indextype    position_indextype,
-                                             void*                  position,
-                                             hipStream_t            stream) const;
+        void                set_position_batch_count(int64_t, hipStream_t stream);
+        int64_t             get_position_batch_count() const;
+        int64_t             get_position_stride() const;
+        rocsparse_status    copy_position_async(rocsparse_pointer_mode pointer_mode,
+                                                rocsparse_indextype    position_indextype,
+                                                void*                  position,
+                                                hipStream_t            stream) const;
 
         void set_max_position_async(hipStream_t stream);
-
         void copy_position_async(const position_t* that, hipStream_t stream);
     };
 

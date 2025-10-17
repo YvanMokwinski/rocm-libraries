@@ -46,8 +46,8 @@ rocsparse_status rocsparse::csrsm_solve(rocsparse_handle             handle,
                                         const int64_t                ldb,
                                         const rocsparse_order        order_B,
                                         const rocsparse_mat_info     info,
-                                        rocsparse_csrsm_info         csrsm_info,
                                         const rocsparse_solve_policy policy,
+                                        rocsparse_csrsm_info         csrsm_info,
                                         void*                        temp_buffer)
 {
     ROCSPARSE_ROUTINE_TRACE;
@@ -75,8 +75,8 @@ rocsparse_status rocsparse::csrsm_solve(rocsparse_handle             handle,
                                                                      static_cast<int64_t>(0),
                                                                      order_B,
                                                                      info,
-                                                                     csrsm_info,
                                                                      policy,
+                                                                     csrsm_info,
                                                                      temp_buffer));
     return rocsparse_status_success;
 }

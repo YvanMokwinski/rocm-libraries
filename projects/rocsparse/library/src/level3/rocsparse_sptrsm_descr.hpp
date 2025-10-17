@@ -31,11 +31,11 @@ protected:
     rocsparse_sptrsm_stage                 m_stage;
     rocsparse_sptrsm_alg                   m_alg;
     rocsparse_operation                    m_operation_A;
-    rocsparse_operation                    m_operation_X;
-    rocsparse_datatype                     m_X_datatype;
-    rocsparse_datatype                     m_Y_datatype;
-    rocsparse_order                        m_X_order;
-    rocsparse_order                        m_Y_order;
+    rocsparse_operation                    m_operation_B;
+    rocsparse_datatype                     m_B_datatype;
+    rocsparse_datatype                     m_C_datatype;
+    rocsparse_order                        m_B_order;
+    rocsparse_order                        m_C_order;
     rocsparse_datatype                     m_scalar_datatype;
     rocsparse_datatype                     m_compute_datatype;
     int64_t                                m_nrhs;
@@ -65,20 +65,20 @@ public:
     int64_t             get_nrhs() const;
     rocsparse_operation get_operation_A() const;
 
-    rocsparse_operation get_operation_X() const;
+    rocsparse_operation get_operation_B() const;
 
     rocsparse_datatype get_scalar_datatype() const;
     const void*        get_scalar_alpha() const;
 
     rocsparse_datatype get_compute_datatype() const;
 
-    rocsparse_datatype get_X_datatype() const;
+    rocsparse_datatype get_B_datatype() const;
 
-    rocsparse_datatype get_Y_datatype() const;
+    rocsparse_datatype get_C_datatype() const;
 
-    rocsparse_order get_X_order() const;
+    rocsparse_order get_B_order() const;
 
-    rocsparse_order get_Y_order() const;
+    rocsparse_order get_C_order() const;
 
     void set_nrhs(int64_t);
     void set_stage(rocsparse_sptrsm_stage value);
@@ -87,14 +87,14 @@ public:
 
     void set_operation_A(rocsparse_operation value);
 
-    void set_operation_X(rocsparse_operation value);
+    void set_operation_B(rocsparse_operation value);
 
     void set_scalar_datatype(rocsparse_datatype value);
     void set_compute_datatype(rocsparse_datatype value);
 
-    void set_X_datatype(rocsparse_datatype value);
-    void set_Y_datatype(rocsparse_datatype value);
+    void set_B_datatype(rocsparse_datatype value);
+    void set_C_datatype(rocsparse_datatype value);
 
-    void set_X_order(rocsparse_order value);
-    void set_Y_order(rocsparse_order value);
+    void set_B_order(rocsparse_order value);
+    void set_C_order(rocsparse_order value);
 };

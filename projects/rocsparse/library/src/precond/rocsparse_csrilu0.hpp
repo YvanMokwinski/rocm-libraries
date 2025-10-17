@@ -24,19 +24,32 @@
 
 #pragma once
 
-#include "rocsparse_utility.hpp"
+#include "rocsparse-types.h"
+#include "rocsparse_csrilu0_info.hpp"
 
 namespace rocsparse
 {
-    template <typename T>
-    rocsparse_status csrilu0_template(rocsparse_handle          handle,
-                                      rocsparse_int             m,
-                                      rocsparse_int             nnz,
-                                      const rocsparse_mat_descr descr,
-                                      T*                        csr_val,
-                                      const rocsparse_int*      csr_row_ptr,
-                                      const rocsparse_int*      csr_col_ind,
-                                      rocsparse_mat_info        info,
-                                      rocsparse_solve_policy    policy,
+    rocsparse_status csrilu0_analysis(rocsparse_handle          handle,
+                                      rocsparse_spmat_descr     A,
+                                      rocsparse_analysis_policy analysis,
+                                      rocsparse_solve_policy    solve,
+                                      rocsparse_csrilu0_info*   p_csrilu0_info,
                                       void*                     temp_buffer);
+
+    rocsparse_status csrilu0_analysis_buffer_size(rocsparse_handle            handle,
+                                                  rocsparse_const_spmat_descr A,
+                                                  size_t*                     buffer_size);
+    rocsparse_status csrilu0_solve_buffer_size(rocsparse_handle            handle,
+                                               rocsparse_const_spmat_descr A,
+                                               size_t*                     buffer_size);
+
+    rocsparse_status csrilu0_solve(rocsparse_handle       handle,
+                                   rocsparse_spmat_descr  A,
+                                   rocsparse_solve_policy policy,
+                                   rocsparse_csrilu0_info csrilu0_info,
+                                   int                    enable_boost,
+                                   size_t                 size_boost_tol,
+                                   const void*            boost_tol,
+                                   const void*            boost_val,
+                                   void*                  temp_buffer);
 }

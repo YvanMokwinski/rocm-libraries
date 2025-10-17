@@ -25,51 +25,33 @@
 #include "rocsparse_csrsm_strided_batched.hpp"
 
 #include "../level2/rocsparse_csrsv.hpp"
-#include "../level2/rocsparse_csrsv_strided_batched.hpp"
 #include "rocsparse_common.hpp"
 #include "rocsparse_control.hpp"
 #include "rocsparse_utility.hpp"
 
-rocsparse_status
-    rocsparse::csrsm_strided_batched_analysis(rocsparse_handle          handle,
-                                              rocsparse_operation       trans_A,
-                                              rocsparse_operation       trans_B,
-                                              int64_t                   batch_count,
-                                              int64_t                   m,
-                                              int64_t                   nrhs,
-                                              int64_t                   nnz,
-                                              rocsparse_datatype        alpha_datatype,
-                                              const void*               alpha,
-                                              int64_t                   alpha_stride,
-                                              const rocsparse_mat_descr descr,
-                                              rocsparse_datatype        csr_val_datatype,
-                                              const void*               csr_val,
-                                              int64_t                   csr_val_stride,
-                                              rocsparse_indextype       csr_row_ptr_indextype,
-                                              const void*               csr_row_ptr,
-                                              rocsparse_indextype       csr_col_ind_indextype,
-                                              const void*               csr_col_ind,
-                                              rocsparse_datatype        B_datatype,
-                                              const void*               B,
-                                              int64_t                   ldb,
-                                              int64_t                   B_stride,
-                                              rocsparse_order           order_B,
-                                              rocsparse_mat_info        info,
-                                              rocsparse_analysis_policy analysis,
-                                              rocsparse_solve_policy    solve,
-                                              rocsparse_csrsm_info*     p_csrsm_info,
-                                              void*                     temp_buffer)
+rocsparse_status rocsparse::csrsm_analysis(rocsparse_handle            handle,
+                                           rocsparse_operation         op_A,
+                                           rocsparse_operation         op_B,
+                                           rocsparse_datatype          alpha_datatype,
+                                           int64_t                     alpha_stride,
+                                           rocsparse_const_spmat_descr A,
+                                           rocsparse_const_dnmat_descr B,
+                                           rocsparse_analysis_policy   analysis,
+                                           rocsparse_solve_policy      solve,
+                                           rocsparse_csrsm_info*       p_csrsm_info,
+                                           void*                       buffer)
 {
     ROCSPARSE_ROUTINE_TRACE;
-
-    if(m == 0 || nrhs == 0 || batch_count == 0)
+    const int64_t nrhs = (op_B == rocsparse_operation_none) ? B->cols : B->rows;
+    if(A->rows == 0 || nrhs == 0 || A->batch_count == 0)
     {
         return rocsparse_status_success;
     }
 
+    rocsparse_mat_descr descr = A->descr;
     ROCSPARSE_CHECKARG(
-        7, descr, (descr->type != rocsparse_matrix_type_general), rocsparse_status_not_implemented);
-    ROCSPARSE_CHECKARG(7,
+        5, descr, (descr->type != rocsparse_matrix_type_general), rocsparse_status_not_implemented);
+    ROCSPARSE_CHECKARG(5,
                        descr,
                        (descr->storage_mode != rocsparse_storage_mode_sorted),
                        rocsparse_status_requires_sorted_storage);
@@ -79,24 +61,8 @@ rocsparse_status
         //
         // Call csrsv.
         //
-        RETURN_IF_ROCSPARSE_ERROR(rocsparse::csrsv_strided_batched_analysis(handle,
-                                                                            trans_A,
-                                                                            batch_count,
-                                                                            m,
-                                                                            nnz,
-                                                                            descr,
-                                                                            csr_val_datatype,
-                                                                            csr_val,
-                                                                            csr_val_stride,
-                                                                            csr_row_ptr_indextype,
-                                                                            csr_row_ptr,
-                                                                            csr_col_ind_indextype,
-                                                                            csr_col_ind,
-                                                                            info,
-                                                                            analysis,
-                                                                            solve,
-                                                                            p_csrsm_info,
-                                                                            temp_buffer));
+        RETURN_IF_ROCSPARSE_ERROR(
+            rocsparse::csrsv_analysis(handle, op_A, A, analysis, solve, p_csrsm_info, buffer));
         return rocsparse_status_success;
     }
 
@@ -105,23 +71,24 @@ rocsparse_status
     // Differentiate the analysis policies
     if(analysis == rocsparse_analysis_policy_reuse)
     {
+        auto info = A->info;
         //
         //
         //
         rocsparse::trm_info_t* p = nullptr;
 
-        p = (p != nullptr) ? p : info->get_csrsm_info(trans_A, descr->fill_mode);
+        p = (p != nullptr) ? p : info->get_csrsm_info(op_A, descr->fill_mode);
 
-        if((descr->fill_mode == rocsparse_fill_mode_lower) && (trans_A == rocsparse_operation_none))
+        if((descr->fill_mode == rocsparse_fill_mode_lower) && (op_A == rocsparse_operation_none))
         {
-            p = (p != nullptr) ? p : info->get_csrilu0_info(trans_A, descr->fill_mode);
-            p = (p != nullptr) ? p : info->get_csric0_info(trans_A, descr->fill_mode);
+            p = (p != nullptr) ? p : info->get_csrilu0_info(op_A, descr->fill_mode);
+            p = (p != nullptr) ? p : info->get_csric0_info(op_A, descr->fill_mode);
         }
 
-        p = (p != nullptr) ? p : info->get_csrsv_info(trans_A, descr->fill_mode);
+        p = (p != nullptr) ? p : info->get_csrsv_info(op_A, descr->fill_mode);
         if(p != nullptr)
         {
-            info->set_csrsm_info(trans_A, descr->fill_mode, p);
+            info->set_csrsm_info(op_A, descr->fill_mode, p);
             return rocsparse_status_success;
         }
     }
@@ -133,7 +100,17 @@ rocsparse_status
     }
 
     // Perform analysis
-    RETURN_IF_ROCSPARSE_ERROR(csrsm_info->recreate(
-        handle, trans_A, m, nnz, descr, csr_val, csr_row_ptr, csr_col_ind, temp_buffer));
+    RETURN_IF_ROCSPARSE_ERROR(csrsm_info->recreate(handle,
+                                                   op_A,
+                                                   A->rows,
+                                                   A->nnz,
+                                                   A->descr,
+                                                   A->data_type,
+                                                   A->val_data,
+                                                   A->row_type,
+                                                   A->row_data,
+                                                   A->col_type,
+                                                   A->col_data,
+                                                   buffer));
     return rocsparse_status_success;
 }

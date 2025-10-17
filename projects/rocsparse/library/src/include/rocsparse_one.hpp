@@ -37,5 +37,10 @@ namespace rocsparse
                              rocsparse_pointer_mode pointer_mode,
                              rocsparse_indextype    data_indextype,
                              void*                  data);
+    void set_minus_one_async(hipStream_t            stream,
+                             rocsparse_pointer_mode pointer_mode,
+                             rocsparse_indextype    data_indextype,
+                             int64_t                data_size,
+                             void*                  data);
 
 }

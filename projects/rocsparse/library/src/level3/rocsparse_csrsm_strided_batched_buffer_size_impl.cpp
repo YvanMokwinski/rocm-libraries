@@ -21,73 +21,52 @@
  * THE SOFTWARE.
  *
  * ************************************************************************ */
-#include "../level2/rocsparse_csrsv_strided_batched.hpp"
+#include "../level2/rocsparse_csrsv.hpp"
 #include "rocsparse_csrsm_strided_batched.hpp"
 #include "rocsparse_primitives.hpp"
 #include "rocsparse_utility.hpp"
 
-rocsparse_status
-    rocsparse::csrsm_strided_batched_buffer_size(rocsparse_handle          handle,
-                                                 rocsparse_operation       trans_A,
-                                                 rocsparse_operation       trans_B,
-                                                 int64_t                   batch_count,
-                                                 int64_t                   m,
-                                                 int64_t                   nrhs,
-                                                 int64_t                   nnz,
-                                                 rocsparse_datatype        alpha_datatype,
-                                                 const void*               alpha,
-                                                 int64_t                   alpha_stride,
-                                                 const rocsparse_mat_descr descr,
-                                                 rocsparse_datatype        csr_val_datatype,
-                                                 const void*               csr_val,
-                                                 int64_t                   csr_val_stride,
-                                                 rocsparse_indextype       csr_row_ptr_indextype,
-                                                 const void*               csr_row_ptr,
-                                                 rocsparse_indextype       csr_col_ind_indextype,
-                                                 const void*               csr_col_ind,
-                                                 rocsparse_datatype        B_datatype,
-                                                 const void*               B,
-                                                 int64_t                   ldb,
-                                                 int64_t                   B_stride,
-                                                 rocsparse_order           order_B,
-                                                 rocsparse_mat_info        info,
-                                                 rocsparse_solve_policy    policy,
-                                                 size_t*                   buffer_size)
+rocsparse_status rocsparse::csrsm_buffer_size(rocsparse_handle            handle,
+                                              rocsparse_operation         op_A,
+                                              rocsparse_operation         op_B,
+                                              rocsparse_datatype          alpha_datatype,
+                                              int64_t                     alpha_stride,
+                                              rocsparse_const_spmat_descr A,
+                                              rocsparse_const_dnmat_descr B,
+                                              rocsparse_solve_policy      policy,
+                                              size_t*                     buffer_size)
 {
     ROCSPARSE_ROUTINE_TRACE;
+    const int64_t nrhs = (op_B == rocsparse_operation_none) ? B->cols : B->rows;
 
-    if(m == 0 || nrhs == 0 || batch_count == 0)
+    if(A->rows == 0 || nrhs == 0 || A->batch_count == 0)
     {
         *buffer_size = 0;
         return rocsparse_status_success;
     }
 
-    const int64_t B_batch_count       = ((B_stride == 0) ? 1 : batch_count);
-    const int64_t csr_val_batch_count = ((csr_val_stride == 0) ? 1 : batch_count);
+    const int64_t B_batch_count      = ((B->batch_stride == 0) ? 1 : B->batch_count);
+    const int64_t A_data_batch_count = ((A->batch_stride == 0) ? 1 : A->batch_count);
 
+    RETURN_WITH_MESSAGE_IF_ROCSPARSE_ERROR(
+        ((A->batch_count != B->batch_count) && (A->batch_count != 1 && B->batch_count != 1))
+            ? rocsparse_status_invalid_value
+            : rocsparse_status_success,
+        "Incompatible batch counts, they must be equal.");
     if(nrhs == 1)
     {
         //
         // Call csrsv.
         //
+        size_t buffer_size_analysis;
         RETURN_IF_ROCSPARSE_ERROR(
-            rocsparse::csrsv_strided_batched_buffer_size(handle,
-                                                         trans_A,
-                                                         batch_count,
-                                                         m,
-                                                         nnz,
-                                                         descr,
-                                                         csr_val_datatype,
-                                                         csr_val,
-                                                         csr_val_stride,
-                                                         csr_row_ptr_indextype,
-                                                         csr_row_ptr,
-                                                         csr_col_ind_indextype,
-                                                         csr_col_ind,
-                                                         info,
-                                                         buffer_size));
+            rocsparse::csrsv_analysis_buffer_size(handle, op_A, A, &buffer_size_analysis));
+        RETURN_IF_ROCSPARSE_ERROR(
+            rocsparse::csrsv_analysis_buffer_size(handle, op_A, A, buffer_size));
+        *buffer_size += buffer_size_analysis;
         *buffer_size
-            += ((rocsparse::datatype_sizeof(B_datatype) * m * B_batch_count - 1) / 256 + 1) * 256;
+            += ((rocsparse::datatype_sizeof(B->data_type) * A->rows * B_batch_count - 1) / 256 + 1)
+               * 256;
         return rocsparse_status_success;
     }
 
@@ -107,65 +86,62 @@ rocsparse_status
 
     blockdim <<= 1;
     const int32_t narrays  = (nrhs - 1) / blockdim + 1;
-    const size_t  J_sizeof = rocsparse::indextype_sizeof(csr_col_ind_indextype);
+    const size_t  J_sizeof = rocsparse::indextype_sizeof(A->col_type);
 
     // int32_t done_array
-    *buffer_size += ((sizeof(int32_t) * m * narrays * batch_count - 1) / 256 + 1) * 256;
+    *buffer_size
+        += ((sizeof(int32_t) * A->rows * narrays * A_data_batch_count - 1) / 256 + 1) * 256;
 
     // workspace
-    *buffer_size += ((J_sizeof * m - 1) / 256 + 1) * 256;
+    *buffer_size += ((J_sizeof * A->rows - 1) / 256 + 1) * 256;
 
     // int32_t workspace2
-    *buffer_size += ((sizeof(int32_t) * m - 1) / 256 + 1) * 256;
+    *buffer_size += ((sizeof(int32_t) * A->rows - 1) / 256 + 1) * 256;
 
     uint32_t startbit = 0;
-    uint32_t endbit   = rocsparse::clz(m);
+    uint32_t endbit   = rocsparse::clz(A->rows);
 
     // rocprim buffer
     {
         size_t rocprim_size;
         auto   sort_pairs_buffer_size
-            = find_radix_sort_pairs_buffer_size(rocsparse_indextype_i32, csr_col_ind_indextype);
+            = find_radix_sort_pairs_buffer_size(rocsparse_indextype_i32, A->col_type);
         static constexpr bool using_double_buffers = true;
         RETURN_IF_ROCSPARSE_ERROR(sort_pairs_buffer_size(
-            handle, m, startbit, endbit, &rocprim_size, using_double_buffers));
+            handle, A->rows, startbit, endbit, &rocprim_size, using_double_buffers));
         *buffer_size += rocprim_size;
     }
 
-    // Additional buffer to store transpose of B, if trans_B == rocsparse_operation_none
-    if(trans_B == rocsparse_operation_none && order_B == rocsparse_order_column)
+    // Additional buffer to store transpose of B, if op_B == rocsparse_operation_none
+    if(op_B == rocsparse_operation_none && B->order == rocsparse_order_column)
     {
-        const int64_t B_batch_count = ((B_stride == 0) ? 1 : batch_count);
         *buffer_size
-            += ((rocsparse::datatype_sizeof(csr_val_datatype) * m * nrhs * B_batch_count - 1) / 256
+            += ((rocsparse::datatype_sizeof(B->data_type) * B->rows * B->cols * B_batch_count - 1)
+                    / 256
                 + 1)
                * 256;
     }
 
     // Additional buffer to store transpose A, if transA != rocsparse_operation_none
-    if(trans_A == rocsparse_operation_transpose
-       || trans_A == rocsparse_operation_conjugate_transpose)
+    if(op_A == rocsparse_operation_transpose || op_A == rocsparse_operation_conjugate_transpose)
     {
-        size_t transpose_size;
         size_t rocprim_size{};
-        auto   sort_pairs_buffer_size
-            = find_radix_sort_pairs_buffer_size(csr_col_ind_indextype, csr_row_ptr_indextype);
+        auto   sort_pairs_buffer_size = find_radix_sort_pairs_buffer_size(A->col_type, A->row_type);
         static constexpr bool using_double_buffers = true;
         RETURN_IF_ROCSPARSE_ERROR(sort_pairs_buffer_size(
-            handle, nnz, startbit, endbit, &rocprim_size, using_double_buffers));
+            handle, A->nnz, startbit, endbit, &rocprim_size, using_double_buffers));
+        size_t transpose_size = rocprim_size;
 
         // rocPRIM does not support in-place sorting, so we need an additional buffer
-        transpose_size += ((J_sizeof * nnz - 1) / 256 + 1) * 256;
+        transpose_size += ((J_sizeof * A->nnz - 1) / 256 + 1) * 256;
 
-        const size_t a
-            = ((rocsparse::indextype_sizeof(csr_row_ptr_indextype) * nnz - 1) / 256 + 1) * 256;
+        const size_t a = ((rocsparse::indextype_sizeof(A->row_type) * A->nnz - 1) / 256 + 1) * 256;
         const size_t b
-            = ((rocsparse::datatype_sizeof(csr_val_datatype) * nnz * csr_val_batch_count - 1) / 256
+            = ((rocsparse::datatype_sizeof(A->data_type) * A->nnz * A_data_batch_count - 1) / 256
                + 1)
               * 256;
 
         transpose_size += rocsparse::max(a, b);
-
         *buffer_size += transpose_size;
     }
 

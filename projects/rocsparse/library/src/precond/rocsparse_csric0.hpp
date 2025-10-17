@@ -28,28 +28,25 @@
 
 namespace rocsparse
 {
-    template <typename T>
-    rocsparse_status csric0_analysis_template(rocsparse_handle          handle,
-                                              rocsparse_int             m,
-                                              rocsparse_int             nnz,
-                                              const rocsparse_mat_descr descr,
-                                              const T*                  csr_val,
-                                              const rocsparse_int*      csr_row_ptr,
-                                              const rocsparse_int*      csr_col_ind,
-                                              rocsparse_mat_info        info,
-                                              rocsparse_analysis_policy analysis,
-                                              rocsparse_solve_policy    solve,
-                                              void*                     temp_buffer);
+    rocsparse_status csric0_analysis_buffer_size(rocsparse_handle            handle,
+                                                 rocsparse_const_spmat_descr A,
+                                                 size_t*                     buffer_size);
 
-    template <typename T>
-    rocsparse_status csric0_template(rocsparse_handle          handle,
-                                     rocsparse_int             m,
-                                     rocsparse_int             nnz,
-                                     const rocsparse_mat_descr descr,
-                                     T*                        csr_val,
-                                     const rocsparse_int*      csr_row_ptr,
-                                     const rocsparse_int*      csr_col_ind,
-                                     rocsparse_mat_info        info,
-                                     rocsparse_solve_policy    policy,
+    rocsparse_status csric0_solve_buffer_size(rocsparse_handle            handle,
+                                              rocsparse_const_spmat_descr A,
+                                              size_t*                     buffer_size);
+
+    rocsparse_status csric0_analysis(rocsparse_handle          handle,
+                                     rocsparse_spmat_descr     A,
+                                     rocsparse_analysis_policy analysis,
+                                     rocsparse_solve_policy    solve,
+                                     rocsparse_csric0_info*    p_csric0_info,
                                      void*                     temp_buffer);
+
+    rocsparse_status csric0_solve(rocsparse_handle       handle,
+                                  rocsparse_spmat_descr  A,
+                                  rocsparse_solve_policy policy,
+                                  rocsparse_csric0_info  csric0_info,
+                                  void*                  temp_buffer);
+
 }

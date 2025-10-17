@@ -28,19 +28,26 @@
 
 struct _rocsparse_dnmat_descr
 {
-    bool init{};
 
-    int64_t rows{};
-    int64_t cols{};
-    int64_t ld{};
-
-    void* values{};
-
-    const void* const_values{};
-
+    int64_t            rows{};
+    int64_t            cols{};
+    int64_t            ld{};
+    int64_t            batch_count{};
+    int64_t            batch_stride{};
+    void*              values{};
+    const void*        const_values{};
     rocsparse_datatype data_type{};
     rocsparse_order    order{};
+    bool               init{};
 
-    int64_t batch_count{};
-    int64_t batch_stride{};
+    _rocsparse_dnmat_descr() = default;
+    _rocsparse_dnmat_descr(int64_t            batch_count_,
+                           int64_t            m_,
+                           int64_t            n_,
+                           int64_t            ld_,
+                           rocsparse_order    order,
+                           rocsparse_datatype data_type_,
+                           const void*        const_values_,
+                           void*              values_,
+                           int64_t            batch_stride_);
 };

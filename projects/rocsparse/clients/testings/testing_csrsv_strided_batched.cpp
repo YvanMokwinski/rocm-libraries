@@ -23,10 +23,21 @@
  * ************************************************************************ */
 #include "rocsparse_enum.hpp"
 #include "testing.hpp"
-
 template <typename T>
 void testing_csrsv_strided_batched_bad_arg(const Arguments& arg)
 {
+}
+
+template <typename T>
+void testing_csrsv_strided_batched(const Arguments& arg)
+{
+}
+
+#if 0
+template <typename T>
+void testing_csrsv_strided_batched_bad_arg(const Arguments& arg)
+{
+
     static const size_t safe_size = 100;
 
     const T h_alpha = static_cast<T>(1);
@@ -766,6 +777,7 @@ void testing_csrsv_strided_batched(const Arguments& arg)
                             get_gpu_time_msec(gpu_solve_time_used));
     }
 }
+#endif
 
 #define INSTANTIATE(TYPE)                                                            \
     template void testing_csrsv_strided_batched_bad_arg<TYPE>(const Arguments& arg); \

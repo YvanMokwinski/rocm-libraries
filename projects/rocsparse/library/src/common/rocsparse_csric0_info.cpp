@@ -23,6 +23,12 @@
 
 #include "rocsparse_csric0_info.hpp"
 
+void _rocsparse_csric0_info::set_batch_count(int64_t value, hipStream_t stream)
+{
+    this->set_pivot_batch_count(value, stream);
+    this->set_singular_pivot_batch_count(value, stream);
+}
+
 void _rocsparse_csric0_info::copy(const _rocsparse_csric0_info* that, hipStream_t stream)
 {
     this->rocsparse::trm_data_t::copy(that, stream);

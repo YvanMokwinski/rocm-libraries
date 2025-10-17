@@ -23,37 +23,32 @@
  * ************************************************************************ */
 
 #pragma once
-
-#include "rocsparse_utility.hpp"
+#include "rocsparse_bsrilu0_info.hpp"
+#include "rocsparse_handle.hpp"
+#include "rocsparse_mat_descr.hpp"
+#include "rocsparse_mat_info.hpp"
 
 namespace rocsparse
 {
-    template <typename T>
-    rocsparse_status bsrilu0_analysis_template(rocsparse_handle          handle,
-                                               rocsparse_direction       dir,
-                                               rocsparse_int             mb,
-                                               rocsparse_int             nnzb,
-                                               const rocsparse_mat_descr descr,
-                                               const T*                  bsr_val,
-                                               const rocsparse_int*      bsr_row_ptr,
-                                               const rocsparse_int*      bsr_col_ind,
-                                               rocsparse_int             block_dim,
-                                               rocsparse_mat_info        info,
-                                               rocsparse_analysis_policy analysis,
-                                               rocsparse_solve_policy    solve,
-                                               void*                     temp_buffer);
+    rocsparse_status bsrilu0_analysis_buffer_size(rocsparse_handle            handle,
+                                                  rocsparse_const_spmat_descr A,
+                                                  size_t* p_buffer_size_in_bytes);
 
-    template <typename T>
-    rocsparse_status bsrilu0_template(rocsparse_handle          handle,
-                                      rocsparse_direction       dir,
-                                      rocsparse_int             mb,
-                                      rocsparse_int             nnzb,
-                                      const rocsparse_mat_descr descr,
-                                      T*                        bsr_val,
-                                      const rocsparse_int*      bsr_row_ptr,
-                                      const rocsparse_int*      bsr_col_ind,
-                                      rocsparse_int             block_dim,
-                                      rocsparse_mat_info        info,
-                                      rocsparse_solve_policy    policy,
+    rocsparse_status bsrilu0_analysis(rocsparse_handle          handle,
+                                      rocsparse_spmat_descr     A,
+                                      rocsparse_analysis_policy analysis,
+                                      rocsparse_solve_policy    solve,
+                                      rocsparse_bsrilu0_info*   p_bsrilu0_info,
                                       void*                     temp_buffer);
+
+    rocsparse_status bsrilu0_solve_buffer_size(rocsparse_handle            handle,
+                                               rocsparse_const_spmat_descr A,
+                                               size_t*                     p_buffer_size_in_bytes);
+
+    rocsparse_status bsrilu0_solve(rocsparse_handle       handle,
+                                   rocsparse_spmat_descr  A,
+                                   rocsparse_solve_policy policy,
+                                   rocsparse_bsrilu0_info bsrilu0_info,
+                                   void*                  temp_buffer);
+
 }

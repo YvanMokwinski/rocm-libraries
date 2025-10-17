@@ -59,6 +59,31 @@ namespace rocsparse
                                             void*                  B,
                                             int64_t                ldb);
 
+    inline rocsparse_status dense_transpose(rocsparse_handle   handle,
+                                            int64_t            m,
+                                            int64_t            n,
+                                            rocsparse_datatype A_datatype,
+                                            const void*        A,
+                                            int64_t            lda,
+                                            rocsparse_datatype B_datatype,
+                                            void*              B,
+                                            int64_t            ldb)
+    {
+        RETURN_IF_ROCSPARSE_ERROR(dense_transpose(handle,
+                                                  rocsparse_pointer_mode_host,
+                                                  m,
+                                                  n,
+                                                  A_datatype,
+                                                  nullptr,
+                                                  A_datatype,
+                                                  A,
+                                                  lda,
+                                                  B_datatype,
+                                                  B,
+                                                  ldb));
+        return rocsparse_status_success;
+    }
+
     template <typename I, typename T>
     inline rocsparse_status dense_transpose(rocsparse_handle handle,
                                             I                m,

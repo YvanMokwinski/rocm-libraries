@@ -44,11 +44,11 @@ _rocsparse_sptrsm_descr::~_rocsparse_sptrsm_descr()
     m_stage            = ((rocsparse_sptrsm_stage)-1);
     m_alg              = ((rocsparse_sptrsm_alg)-1);
     m_operation_A      = ((rocsparse_operation)-1);
-    m_operation_X      = ((rocsparse_operation)-1);
-    m_X_datatype       = ((rocsparse_datatype)-1);
-    m_Y_datatype       = ((rocsparse_datatype)-1);
-    m_X_order          = ((rocsparse_order)-1);
-    m_Y_order          = ((rocsparse_order)-1);
+    m_operation_B      = ((rocsparse_operation)-1);
+    m_B_datatype       = ((rocsparse_datatype)-1);
+    m_C_datatype       = ((rocsparse_datatype)-1);
+    m_B_order          = ((rocsparse_order)-1);
+    m_C_order          = ((rocsparse_order)-1);
     m_scalar_datatype  = ((rocsparse_datatype)-1);
     m_compute_datatype = ((rocsparse_datatype)-1);
     m_nrhs             = -1;
@@ -61,11 +61,11 @@ _rocsparse_sptrsm_descr::_rocsparse_sptrsm_descr()
     : m_stage((rocsparse_sptrsm_stage)-1)
     , m_alg((rocsparse_sptrsm_alg)-1)
     , m_operation_A((rocsparse_operation)-1)
-    , m_operation_X((rocsparse_operation)-1)
-    , m_X_datatype((rocsparse_datatype)-1)
-    , m_Y_datatype((rocsparse_datatype)-1)
-    , m_X_order((rocsparse_order)-1)
-    , m_Y_order((rocsparse_order)-1)
+    , m_operation_B((rocsparse_operation)-1)
+    , m_B_datatype((rocsparse_datatype)-1)
+    , m_C_datatype((rocsparse_datatype)-1)
+    , m_B_order((rocsparse_order)-1)
+    , m_C_order((rocsparse_order)-1)
     , m_scalar_datatype((rocsparse_datatype)-1)
     , m_compute_datatype((rocsparse_datatype)-1)
     , m_nrhs(-1)
@@ -104,9 +104,9 @@ rocsparse_operation _rocsparse_sptrsm_descr::get_operation_A() const
     return this->m_operation_A;
 }
 
-rocsparse_operation _rocsparse_sptrsm_descr::get_operation_X() const
+rocsparse_operation _rocsparse_sptrsm_descr::get_operation_B() const
 {
-    return this->m_operation_X;
+    return this->m_operation_B;
 }
 
 rocsparse_datatype _rocsparse_sptrsm_descr::get_scalar_datatype() const
@@ -124,24 +124,24 @@ const void* _rocsparse_sptrsm_descr::get_scalar_alpha() const
     return this->m_scalar_alpha;
 }
 
-rocsparse_datatype _rocsparse_sptrsm_descr::get_X_datatype() const
+rocsparse_datatype _rocsparse_sptrsm_descr::get_B_datatype() const
 {
-    return this->m_X_datatype;
+    return this->m_B_datatype;
 }
 
-rocsparse_datatype _rocsparse_sptrsm_descr::get_Y_datatype() const
+rocsparse_datatype _rocsparse_sptrsm_descr::get_C_datatype() const
 {
-    return this->m_Y_datatype;
+    return this->m_C_datatype;
 }
 
-rocsparse_order _rocsparse_sptrsm_descr::get_X_order() const
+rocsparse_order _rocsparse_sptrsm_descr::get_B_order() const
 {
-    return this->m_X_order;
+    return this->m_B_order;
 }
 
-rocsparse_order _rocsparse_sptrsm_descr::get_Y_order() const
+rocsparse_order _rocsparse_sptrsm_descr::get_C_order() const
 {
-    return this->m_Y_order;
+    return this->m_C_order;
 }
 
 void _rocsparse_sptrsm_descr::set_nrhs(int64_t value)
@@ -164,9 +164,9 @@ void _rocsparse_sptrsm_descr::set_operation_A(rocsparse_operation value)
     this->m_operation_A = value;
 }
 
-void _rocsparse_sptrsm_descr::set_operation_X(rocsparse_operation value)
+void _rocsparse_sptrsm_descr::set_operation_B(rocsparse_operation value)
 {
-    this->m_operation_X = value;
+    this->m_operation_B = value;
 }
 
 void _rocsparse_sptrsm_descr::set_scalar_datatype(rocsparse_datatype value)
@@ -184,22 +184,22 @@ void _rocsparse_sptrsm_descr::set_scalar_alpha(const void* value)
     this->m_scalar_alpha = value;
 }
 
-void _rocsparse_sptrsm_descr::set_X_datatype(rocsparse_datatype value)
+void _rocsparse_sptrsm_descr::set_B_datatype(rocsparse_datatype value)
 {
-    this->m_X_datatype = value;
+    this->m_B_datatype = value;
 }
-void _rocsparse_sptrsm_descr::set_Y_datatype(rocsparse_datatype value)
+void _rocsparse_sptrsm_descr::set_C_datatype(rocsparse_datatype value)
 {
-    this->m_Y_datatype = value;
+    this->m_C_datatype = value;
 }
 
-void _rocsparse_sptrsm_descr::set_X_order(rocsparse_order value)
+void _rocsparse_sptrsm_descr::set_B_order(rocsparse_order value)
 {
-    this->m_X_order = value;
+    this->m_B_order = value;
 }
-void _rocsparse_sptrsm_descr::set_Y_order(rocsparse_order value)
+void _rocsparse_sptrsm_descr::set_C_order(rocsparse_order value)
 {
-    this->m_Y_order = value;
+    this->m_C_order = value;
 }
 
 extern "C" rocsparse_status rocsparse_create_sptrsm_descr(rocsparse_sptrsm_descr* descr)

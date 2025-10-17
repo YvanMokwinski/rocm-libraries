@@ -136,7 +136,8 @@ namespace rocsparse
                 handle->stream,
                 static_cast<I>(m),
                 static_cast<I>(n),
-                *reinterpret_cast<const T*>(alpha_device_host),
+                (alpha_device_host == nullptr) ? static_cast<T>(1)
+                                               : *reinterpret_cast<const T*>(alpha_device_host),
                 0,
                 reinterpret_cast<const T*>(A),
                 lda,

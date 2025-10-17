@@ -39,6 +39,23 @@ void rocsparse::set_minus_one_async(hipStream_t            stream,
     }
 }
 
+void rocsparse::set_minus_one_async(hipStream_t            stream,
+                                    rocsparse_pointer_mode pointer_mode,
+                                    rocsparse_indextype    data_indextype,
+                                    int64_t                data_size,
+                                    void*                  data)
+{
+    if(pointer_mode == rocsparse_pointer_mode_device)
+    {
+        THROW_IF_HIP_ERROR(hipMemsetAsync(
+            data, 0xFF, rocsparse::indextype_sizeof(data_indextype) * data_size, stream));
+    }
+    else
+    {
+        memset(data, 0xFF, rocsparse::indextype_sizeof(data_indextype) * data_size);
+    }
+}
+
 void rocsparse::one(const rocsparse_handle handle, float** one)
 {
     *one = (float*)handle->sone;

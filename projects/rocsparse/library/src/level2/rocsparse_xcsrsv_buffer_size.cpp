@@ -76,21 +76,41 @@ namespace rocsparse
         RETURN_IF_ROCSPARSE_ERROR(xcsrsv_buffer_size_checkarg(
             handle, trans, m, nnz, descr, csr_val, csr_row_ptr, csr_col_ind, info, buffer_size));
 
-        RETURN_IF_ROCSPARSE_ERROR(
-            rocsparse::csrsv_buffer_size(handle,
-                                         trans,
-                                         m,
-                                         nnz,
-                                         descr,
-                                         rocsparse::get_datatype<T>(),
-                                         csr_val,
-                                         rocsparse::get_indextype<rocsparse_int>(),
-                                         csr_row_ptr,
-                                         rocsparse::get_indextype<rocsparse_int>(),
-                                         csr_col_ind,
-                                         info,
-                                         buffer_size));
+        _rocsparse_spmat_descr csr(rocsparse_format_csr,
 
+                                   false,
+                                   static_cast<int64_t>(1),
+                                   m,
+                                   m,
+                                   nnz,
+
+                                   rocsparse::get_datatype<T>(),
+                                   csr_val,
+                                   nullptr,
+                                   static_cast<int64_t>(0),
+
+                                   //
+                                   rocsparse::get_indextype<rocsparse_int>(),
+                                   csr_row_ptr,
+                                   nullptr,
+                                   static_cast<int64_t>(0),
+
+                                   rocsparse::get_indextype<rocsparse_int>(),
+                                   csr_col_ind,
+                                   nullptr,
+                                   static_cast<int64_t>(0),
+
+                                   descr->base,
+                                   descr,
+                                   info);
+        size_t                 buffer_sizes[2]{};
+        RETURN_IF_ROCSPARSE_ERROR(
+            rocsparse::csrsv_analysis_buffer_size(handle, trans, &csr, &buffer_sizes[0]));
+
+        RETURN_IF_ROCSPARSE_ERROR(
+            rocsparse::csrsv_solve_buffer_size(handle, trans, &csr, &buffer_sizes[1]));
+
+        buffer_size[0] = std::max(buffer_sizes[0], buffer_sizes[0]);
         return rocsparse_status_success;
     }
 

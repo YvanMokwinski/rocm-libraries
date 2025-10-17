@@ -36,7 +36,8 @@ namespace rocsparse
         void*               m_row_ptr{};
 
     public:
-        const void* get_row_ptr() const;
+        const void*         get_row_ptr() const;
+        rocsparse_indextype get_row_ptr_indextype() const;
         sorted_coo2csr_info_t() = delete;
 
         sorted_coo2csr_info_t(int64_t             num_rows,

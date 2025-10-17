@@ -344,7 +344,8 @@ namespace rocsparse
                                                   rocsparse_fill_mode          fill_mode,
                                                   int32_t*                     done_array,
                                                   int64_t                      done_array_stride,
-                                                  const rocsparse::trm_info_t* csrsm_info)
+                                                  const rocsparse::trm_info_t* trm_info,
+                                                  rocsparse::pivot_info_t*     pivot_info)
 
     {
 
@@ -395,8 +396,8 @@ namespace rocsparse
                                                 B_stride,
                                                 done_array,
                                                 done_array_stride,
-                                                csrsm_info->get_row_map(),
-                                                info->zero_pivot,
+                                                trm_info->get_row_map(),
+                                                pivot_info->get_zero_pivot(),
                                                 static_cast<int64_t>(1),
                                                 descr->base,
                                                 fill_mode,
@@ -404,6 +405,7 @@ namespace rocsparse
         return rocsparse_status_success;
     }
 
+#if 0
     rocsparse_status csrsm_solve_kernel_launch(rocsparse_handle          handle,
                                                rocsparse_operation       trans_B,
                                                int64_t                   m,
@@ -423,7 +425,8 @@ namespace rocsparse
                                                rocsparse_mat_info           info,
                                                rocsparse_fill_mode          fill_mode,
                                                int32_t*                     done_array,
-                                               const rocsparse::trm_info_t* csrsm_info)
+                                               const rocsparse::trm_info_t* trm_info,
+					       rocsparse::pivot_info_t*pivot_info)
 
     {
         RETURN_IF_ROCSPARSE_ERROR(csrsm_solve_strided_batched_kernel_launch(handle,
@@ -452,8 +455,9 @@ namespace rocsparse
                                                                             fill_mode,
                                                                             done_array,
                                                                             static_cast<int64_t>(0),
-                                                                            csrsm_info));
+                                                                            trm_info,
+									    pivot_info));
         return rocsparse_status_success;
     }
-
+#endif
 }

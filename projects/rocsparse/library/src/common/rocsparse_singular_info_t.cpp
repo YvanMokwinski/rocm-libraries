@@ -24,6 +24,17 @@
 #include "rocsparse_singular_info_t.hpp"
 #include "rocsparse_utility.hpp"
 
+void rocsparse::singular_info_t::set_singular_pivot_batch_count(const int64_t value,
+                                                                hipStream_t   stream)
+{
+    this->set_position_batch_count(value, stream);
+}
+
+int64_t rocsparse::singular_info_t::get_singular_pivot_batch_count() const
+{
+    return this->get_position_batch_count();
+}
+
 rocsparse_status
     rocsparse::singular_info_t::copy_singular_pivot_async(rocsparse_pointer_mode pointer_mode,
                                                           rocsparse_indextype    position_indextype,
@@ -59,10 +70,11 @@ const void* rocsparse::singular_info_t::get_singular_pivot() const
     return this->get_position();
 }
 
-void rocsparse::singular_info_t::create_singular_pivot_async(rocsparse_indextype indextype,
+void rocsparse::singular_info_t::create_singular_pivot_async(int64_t             batch_count,
+                                                             rocsparse_indextype indextype,
                                                              hipStream_t         stream)
 {
-    this->create_position_async(indextype, stream);
+    this->create_position_async(batch_count, indextype, stream);
 }
 
 rocsparse_indextype rocsparse::singular_info_t::get_singular_pivot_indextype() const
@@ -78,6 +90,11 @@ double rocsparse::singular_info_t::get_singular_tol() const
 void rocsparse::singular_info_t::set_singular_tol(double value)
 {
     this->m_singular_tol = value;
+}
+
+int64_t rocsparse::singular_info_t::get_singular_pivot_stride() const
+{
+    return this->get_position_stride();
 }
 
 rocsparse::singular_info_t::~singular_info_t() {}

@@ -66,7 +66,7 @@ namespace rocsparse
         ROCSPARSE_CHECKARG_ARRAY(11, m, y);
         ROCSPARSE_CHECKARG_ENUM(12, policy);
         ROCSPARSE_CHECKARG_POINTER(13, temp_buffer);
-        return rocsparse_status_continue;
+        return rocsparse_status_success;
     }
 
     template <typename T>
@@ -102,26 +102,48 @@ namespace rocsparse
                                                                    policy,
                                                                    temp_buffer));
 
+        rocsparse_csrsv_info   csrsv_info = (info != nullptr) ? info->get_csrsv_info() : nullptr;
+        _rocsparse_spmat_descr csr(rocsparse_format_csr,
+
+                                   false,
+                                   static_cast<int64_t>(1),
+                                   m,
+                                   m,
+                                   nnz,
+
+                                   rocsparse::get_datatype<T>(),
+                                   csr_val,
+                                   nullptr,
+                                   static_cast<int64_t>(0),
+
+                                   //
+                                   rocsparse::get_indextype<rocsparse_int>(),
+                                   csr_row_ptr,
+                                   nullptr,
+                                   static_cast<int64_t>(0),
+
+                                   rocsparse::get_indextype<rocsparse_int>(),
+                                   csr_col_ind,
+                                   nullptr,
+                                   static_cast<int64_t>(0),
+
+                                   descr->base,
+                                   descr,
+                                   info);
+
+        _rocsparse_dnvec_descr dnvec_descr_x(1, m, rocsparse::get_datatype<T>(), x, nullptr, 1, 0);
+        _rocsparse_dnvec_descr dnvec_descr_y(1, m, rocsparse::get_datatype<T>(), y, y, 1, 0);
+
         RETURN_IF_ROCSPARSE_ERROR(rocsparse::csrsv_solve(handle,
                                                          trans,
-                                                         m,
-                                                         nnz,
                                                          rocsparse::get_datatype<T>(),
                                                          alpha,
-                                                         descr,
-                                                         rocsparse::get_datatype<T>(),
-                                                         csr_val,
-                                                         rocsparse::get_indextype<rocsparse_int>(),
-                                                         csr_row_ptr,
-                                                         rocsparse::get_indextype<rocsparse_int>(),
-                                                         csr_col_ind,
-                                                         info,
-                                                         rocsparse::get_datatype<T>(),
-                                                         x,
-                                                         static_cast<int64_t>(1),
-                                                         rocsparse::get_datatype<T>(),
-                                                         y,
+                                                         static_cast<int64_t>(0),
+                                                         &csr,
+                                                         &dnvec_descr_x,
+                                                         &dnvec_descr_y,
                                                          policy,
+                                                         csrsv_info,
                                                          temp_buffer));
 
         return rocsparse_status_success;

@@ -2587,6 +2587,58 @@ ROCSPARSE_EXPORT
 rocsparse_status rocsparse_dnvec_set_values(rocsparse_dnvec_descr descr, void* values);
 
 /*! \ingroup aux_module
+ *  \brief Get the batch count and batch stride from the dense vector descriptor
+ *
+ *  @param[in]
+ *  descr        the pointer to the dense vector descriptor.
+ *  @param[out]
+ *  batch_count  the batch count in the dense vector.
+ *  @param[out]
+ *  batch_stride the batch stride in the dense vector.
+ *
+ *  \retval rocsparse_status_success the operation completed successfully.
+ *  \retval rocsparse_status_invalid_pointer if \p descr is invalid.
+ *  \retval rocsparse_status_invalid_size if \p batch_count or \p batch_stride is invalid.
+ */
+ROCSPARSE_EXPORT
+rocsparse_status rocsparse_dnvec_get_strided_batch(rocsparse_const_dnvec_descr descr,
+                                                   rocsparse_int*              batch_count,
+                                                   int64_t*                    batch_stride);
+
+/*! \ingroup aux_module
+ *  \brief Overwrite the increment of the dense vector, which is 1 by default.
+ *
+ *  @param[inout]
+ *  descr        the pointer to the dense vector descriptor.
+ *  @param[in]
+ *  inc  value of the increment.
+ *
+ *  \retval rocsparse_status_success the operation completed successfully.
+ *  \retval rocsparse_status_invalid_pointer if \p descr is invalid.
+ */
+ROCSPARSE_EXPORT
+rocsparse_status rocsparse_dnvec_set_inc(rocsparse_dnvec_descr descr, int64_t inc);
+
+/*! \ingroup aux_module
+ *  \brief Set the batch count and batch stride in the dense vector descriptor
+ *
+ *  @param[inout]
+ *  descr        the pointer to the dense vector descriptor.
+ *  @param[in]
+ *  batch_count  the batch count in the dense vector.
+ *  @param[in]
+ *  batch_stride the batch stride in the dense vector.
+ *
+ *  \retval rocsparse_status_success the operation completed successfully.
+ *  \retval rocsparse_status_invalid_pointer if \p descr is invalid.
+ *  \retval rocsparse_status_invalid_size if \p batch_count or \p batch_stride is invalid.
+ */
+ROCSPARSE_EXPORT
+rocsparse_status rocsparse_dnvec_set_strided_batch(rocsparse_dnvec_descr descr,
+                                                   rocsparse_int         batch_count,
+                                                   int64_t               batch_stride);
+
+/*! \ingroup aux_module
  *  \brief Create a dense matrix descriptor
  *  \details
  *  \p rocsparse_create_dnmat_descr creates a dense matrix descriptor. It should be

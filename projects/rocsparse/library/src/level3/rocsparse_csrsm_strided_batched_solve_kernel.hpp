@@ -53,6 +53,7 @@ namespace rocsparse
                                                   rocsparse_fill_mode          fill_mode,
                                                   int32_t*                     done_array,
                                                   int64_t                      done_array_stride,
-                                                  const rocsparse::trm_info_t* csrsm_info);
+                                                  const rocsparse::trm_info_t* csrsm_info,
+                                                  rocsparse::pivot_info_t*     pivot_info);
 
 }

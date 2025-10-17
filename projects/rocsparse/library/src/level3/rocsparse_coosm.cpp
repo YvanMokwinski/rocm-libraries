@@ -25,7 +25,7 @@
 #include "rocsparse_coosm.hpp"
 
 #include "rocsparse_control.hpp"
-#include "rocsparse_csrsm_template.hpp"
+#include "rocsparse_csrsm.hpp"
 #include "rocsparse_utility.hpp"
 #include <map>
 #include <sstream>
