@@ -179,6 +179,7 @@ set(ROCSPARSE_CLIENTS_TESTINGS
 ../testings/testing_sptrsv_csr.cpp
 ../testings/testing_sptrsv_coo.cpp
 ../testings/testing_spitsv_csr.cpp
+../testings/testing_spequilibrate.cpp
 ../testings/testing_spsm_csr.cpp
 ../testings/testing_spsm_coo.cpp
 ../testings/testing_sptrsm_csr.cpp

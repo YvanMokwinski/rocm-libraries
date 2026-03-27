@@ -162,6 +162,13 @@ inline void auto_testing_bad_arg_set_invalid(rocsparse_spitsv_alg& p)
 }
 
 template <>
+inline void auto_testing_bad_arg_set_invalid(rocsparse_spequilibrate_alg& p)
+{
+    p = (rocsparse_spequilibrate_alg)-1;
+}
+
+
+template <>
 inline void auto_testing_bad_arg_set_invalid(rocsparse_spsm_alg& p)
 {
     p = (rocsparse_spsm_alg)-1;
@@ -309,6 +316,25 @@ template <>
 inline void auto_testing_bad_arg_set_invalid(rocsparse_spitsv_stage& p)
 {
     p = (rocsparse_spitsv_stage)-1;
+}
+
+template <>
+inline void auto_testing_bad_arg_set_invalid(rocsparse_spequilibrate_input& p)
+{
+    p = (rocsparse_spequilibrate_input)-1;
+}
+
+template <>
+inline void auto_testing_bad_arg_set_invalid(rocsparse_spequilibrate_output& p)
+{
+    p = (rocsparse_spequilibrate_output)-1;
+}
+
+
+template <>
+inline void auto_testing_bad_arg_set_invalid(rocsparse_spequilibrate_stage& p)
+{
+    p = (rocsparse_spequilibrate_stage)-1;
 }
 
 template <>

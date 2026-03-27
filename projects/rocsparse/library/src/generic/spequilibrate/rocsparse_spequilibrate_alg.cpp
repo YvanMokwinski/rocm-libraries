@@ -1,6 +1,6 @@
 /*! \file */
 /* ************************************************************************
- * Copyright (C) 2025 Advanced Micro Devices, Inc. All rights Reserved.
+ * Copyright (C) 2026 Advanced Micro Devices, Inc. All rights Reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -22,32 +22,28 @@
  *
  * ************************************************************************ */
 
-#pragma once
+
 
 #include "rocsparse-types.h"
+#include "rocsparse_enum_utils.hpp"
 
 namespace rocsparse
 {
-
-    template <typename T>
-    rocsparse_status assign_async(int64_t n, T* dest, T value, hipStream_t stream);
-
-    rocsparse_status
-        assign_max_async(int64_t n, rocsparse_indextype indextype, void* dest, hipStream_t stream);
-
-
-  rocsparse_status gassign_async_one(int64_t batch_count,
-				     int64_t n,
-				     rocsparse_datatype datatype,
-				     void* dest,
-				     int64_t inc,
-				     hipStream_t stream);
-
-  rocsparse_status gassign_async_zero(int64_t batch_count,
-				      int64_t n,
-				      rocsparse_datatype datatype,
-				      void* dest,
-				      int64_t inc,
-				      hipStream_t stream);
+  template <>
+  bool rocsparse::enum_utils::is_invalid(rocsparse_spequilibrate_alg value)
+  {
+    
+    switch(value)
+      {
+      case rocsparse_spequilibrate_alg_default:
+      case rocsparse_spequilibrate_alg_ruiz:
+	{
+	  return false;
+	}
+      }
+    
+    return true;
+  }
   
 }
+

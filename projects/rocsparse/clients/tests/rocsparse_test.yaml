@@ -121,6 +121,7 @@ include: test_v2_spmv_sell.yaml
 include: test_spsv_csr.yaml
 include: test_sptrsv_csr.yaml
 include: test_spitsv_csr.yaml
+include: test_spequilibrate.yaml
 include: test_spsv_coo.yaml
 include: test_sptrsv_coo.yaml
 include: test_spsm_csr.yaml

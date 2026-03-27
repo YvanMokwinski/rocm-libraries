@@ -1142,6 +1142,35 @@ typedef enum rocsparse_gpsv_interleaved_alg_
     rocsparse_gpsv_interleaved_alg_qr      = 1 /**< QR algorithm */
 } rocsparse_gpsv_interleaved_alg;
 
+
+typedef struct _rocsparse_spequilibrate_descr * rocsparse_spequilibrate_descr;
+
+typedef enum _rocsparse_spequilibrate_alg
+  {
+    rocsparse_spequilibrate_alg_default,
+    rocsparse_spequilibrate_alg_ruiz
+  } rocsparse_spequilibrate_alg;
+  
+  typedef enum _rocsparse_spequilibrate_input
+    {
+      rocsparse_spequilibrate_input_alg,
+      rocsparse_spequilibrate_input_ruiz_nmaxiter,
+      rocsparse_spequilibrate_input_ruiz_tol
+    }rocsparse_spequilibrate_input;
+  
+  typedef enum _rocsparse_spequilibrate_output
+    {
+      rocsparse_spequilibrate_output_ruiz_iter,
+      rocsparse_spequilibrate_output_ruiz_nrm
+    } rocsparse_spequilibrate_output;
+  
+  typedef enum _rocsparse_spequilibrate_stage
+    {
+      rocsparse_spequilibrate_stage_analysis,
+      rocsparse_spequilibrate_stage_compute
+    } rocsparse_spequilibrate_stage;
+
+
 #ifdef __cplusplus
 }
 #endif

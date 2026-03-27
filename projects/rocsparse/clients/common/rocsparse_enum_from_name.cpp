@@ -128,6 +128,9 @@ DEF(rocsparse_spsv_alg, rocsparse_spsv_alg_default);
 DEF(rocsparse_sptrsv_alg, rocsparse_sptrsv_alg_default);
 
 DEF(rocsparse_spitsv_alg, rocsparse_spitsv_alg_default);
+DEF(rocsparse_spequilibrate_alg,
+    rocsparse_spequilibrate_alg_default,
+    rocsparse_spequilibrate_alg_ruiz);
 
 DEF(rocsparse_spsm_alg, rocsparse_spsm_alg_default);
 DEF(rocsparse_sptrsm_alg, rocsparse_sptrsm_alg_default);
@@ -473,6 +476,19 @@ bool rocsparse_spitsv_alg_from_name(rocsparse_spitsv_alg value, const char* name
     return false;
 }
 
+bool rocsparse_spequilibrate_alg_from_name(rocsparse_spequilibrate_alg value, const char* name)
+{
+    for(auto v : rocsparse_spequilibrate_alg_st::all)
+    {
+        switch(v)
+        {
+            CASE(rocsparse_spequilibrate_alg_default);
+            CASE(rocsparse_spequilibrate_alg_ruiz);
+        }
+    }
+    return false;
+}
+
 bool rocsparse_spsm_alg_from_name(rocsparse_spsm_alg value, const char* name)
 {
     for(auto v : rocsparse_spsm_alg_st::all)
@@ -637,6 +653,7 @@ bool convert(int& v, const char* enum_type, const char* value)
     DEF(rocsparse_spsv_alg);
     DEF(rocsparse_sptrsv_alg);
     DEF(rocsparse_spitsv_alg);
+    DEF(rocsparse_spequilibrate_alg);
     DEF(rocsparse_spsm_alg);
     DEF(rocsparse_sptrsm_alg);
     DEF(rocsparse_spmm_alg);
@@ -684,6 +701,7 @@ bool get_size(uint64_t& v, const char* enum_type)
     DEF(rocsparse_spsv_alg);
     DEF(rocsparse_sptrsv_alg);
     DEF(rocsparse_spitsv_alg);
+    DEF(rocsparse_spequilibrate_alg);
     DEF(rocsparse_spsm_alg);
     DEF(rocsparse_sptrsm_alg);
     DEF(rocsparse_spmm_alg);
@@ -730,6 +748,7 @@ const char* get_name(const char* enum_type, uint64_t index)
     DEF(rocsparse_spsv_alg);
     DEF(rocsparse_sptrsv_alg);
     DEF(rocsparse_spitsv_alg);
+    DEF(rocsparse_spequilibrate_alg);
     DEF(rocsparse_spsm_alg);
     DEF(rocsparse_sptrsm_alg);
     DEF(rocsparse_spmm_alg);

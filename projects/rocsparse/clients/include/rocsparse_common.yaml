@@ -176,6 +176,10 @@ Datatypes:
       bases: [c_int ]
       attr:
         rocsparse_spitsv_alg_default: 0
+  - rocsparse_spequilibrate_alg:
+      bases: [c_int ]
+      attr:
+        rocsparse_spequilibrate_alg_ruiz: 1
   - rocsparse_spsm_alg:
       bases: [c_int ]
       attr:
@@ -458,6 +462,9 @@ All rocsparse_sptrsv_alg: &all_rocsparse_sptrsv_alg
 All rocsparse_spitsv_alg: &all_rocsparse_spitsv_alg
         [rocsparse_spitsv_alg_default]
 
+All rocsparse_spequilibrate_alg: &all_rocsparse_spequilibrate_alg
+        [rocsparse_spequilibrate_alg_ruiz]
+
 All rocsparse_spsm_alg: &all_rocsparse_spsm_alg
         [rocsparse_spsm_alg_default]
 
@@ -568,6 +575,7 @@ Arguments:
   - spsv_alg: rocsparse_spsv_alg
   - sptrsv_alg: rocsparse_sptrsv_alg
   - spitsv_alg: rocsparse_spitsv_alg
+  - spequilibrate_alg: rocsparse_spequilibrate_alg
   - spsm_alg: rocsparse_spsm_alg
   - sptrsm_alg: rocsparse_sptrsm_alg
   - spmm_alg: rocsparse_spmm_alg
@@ -722,6 +730,7 @@ Defaults:
   spsv_alg: rocsparse_spsv_alg_default
   sptrsv_alg: rocsparse_sptrsv_alg_default
   spitsv_alg: rocsparse_spitsv_alg_default
+  spequilibrate_alg: rocsparse_spequilibrate_alg_ruiz
   spsm_alg: rocsparse_spsm_alg_default
   sptrsm_alg: rocsparse_sptrsm_alg_default
   spmm_alg: rocsparse_spmm_alg_default

@@ -405,6 +405,19 @@ constexpr auto rocsparse_spitsvalg2string(rocsparse_spitsv_alg alg)
     return "invalid";
 }
 
+constexpr auto rocsparse_spequilibratealg2string(rocsparse_spequilibrate_alg alg)
+{
+    switch(alg)
+    {
+    case rocsparse_spequilibrate_alg_default:
+      return "default";
+    case rocsparse_spequilibrate_alg_ruiz:
+        return "ruiz";
+    }
+    return "invalid";
+}
+
+
 constexpr auto rocsparse_spsmalg2string(rocsparse_spsm_alg alg)
 {
     switch(alg)

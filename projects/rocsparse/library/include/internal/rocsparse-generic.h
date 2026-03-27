@@ -50,5 +50,6 @@
 #include "generic/rocsparse_sptrsv.h"
 #include "generic/rocsparse_spvv.h"
 #include "generic/rocsparse_v2_spmv.h"
+#include "generic/rocsparse_spequilibrate.h"
 
 #endif // ROCSPARSE_GENERIC_H

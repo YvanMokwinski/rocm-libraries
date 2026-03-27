@@ -98,6 +98,7 @@ rocsparse_arguments_config::rocsparse_arguments_config()
         this->spsv_alg             = rocsparse_spsv_alg_default;
         this->sptrsv_alg           = rocsparse_sptrsv_alg_default;
         this->spitsv_alg           = rocsparse_spitsv_alg_default;
+        this->spequilibrate_alg    = rocsparse_spequilibrate_alg_ruiz;
         this->spsm_alg             = rocsparse_spsm_alg_default;
         this->sptrsm_alg           = rocsparse_sptrsm_alg_default;
         this->spmm_alg             = rocsparse_spmm_alg_default;

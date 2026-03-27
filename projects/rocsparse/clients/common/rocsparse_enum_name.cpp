@@ -265,6 +265,17 @@ const char* rocsparse_spitsv_alg_name(rocsparse_spitsv_alg value)
     RETURN_INVALID;
 }
 
+const char* rocsparse_spequilibrate_alg_name(rocsparse_spequilibrate_alg value)
+{
+    switch(value)
+    {
+        CASE(rocsparse_spequilibrate_alg_default);
+        CASE(rocsparse_spequilibrate_alg_ruiz);
+    }
+    RETURN_INVALID;
+}
+
+
 const char* rocsparse_spsm_alg_name(rocsparse_spsm_alg value)
 {
     switch(value)

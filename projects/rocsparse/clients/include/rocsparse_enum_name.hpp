@@ -177,6 +177,13 @@ const char* rocsparse_spitsv_alg_name(rocsparse_spitsv_alg value);
 /// @param[in] value value of the enumeration.
 /// @return The litteral name of the enumeration.
 ///
+const char* rocsparse_spequilibrate_alg_name(rocsparse_spequilibrate_alg value);
+
+///
+/// @brief Get the litteral name of the enumeration.
+/// @param[in] value value of the enumeration.
+/// @return The litteral name of the enumeration.
+///
 const char* rocsparse_spsm_alg_name(rocsparse_spsm_alg value);
 
 ///
@@ -443,6 +450,16 @@ inline const char* rocsparse_enum_name(rocsparse_sptrsv_alg value)
 inline const char* rocsparse_enum_name(rocsparse_spitsv_alg value)
 {
     return rocsparse_spitsv_alg_name(value);
+}
+
+///
+/// @brief Get the litteral name of the enumeration.
+/// @param[in] value value of the enumeration.
+/// @return The litteral name of the enumeration.
+///
+inline const char* rocsparse_enum_name(rocsparse_spequilibrate_alg value)
+{
+    return rocsparse_spequilibrate_alg_name(value);
 }
 
 ///

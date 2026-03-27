@@ -646,6 +646,22 @@ set(rocsparse_source
   src/conversion/rocsparse_spmat_transfer_from.cpp
   src/conversion/rocsparse_internal_spmat_print.cpp
 
+# Generic
+  src/generic/spequilibrate/rocsparse_spequilibrate_alg.cpp
+  src/generic/spequilibrate/rocsparse_spequilibrate_stage.cpp
+  src/generic/spequilibrate/rocsparse_spequilibrate_input.cpp
+  src/generic/spequilibrate/rocsparse_spequilibrate_output.cpp
+  src/generic/spequilibrate/rocsparse_spequilibrate_descr.cpp
+  src/generic/spequilibrate/rocsparse_spequilibrate_get_output.cpp
+  src/generic/spequilibrate/rocsparse_spequilibrate_set_input.cpp
+  src/generic/spequilibrate/rocsparse_spequilibrate.cpp
+  src/generic/spequilibrate/rocsparse_spequilibrate_buffer_size.cpp
+  src/generic/spequilibrate/rocsparse_spmat_scale.cpp
+  src/generic/spequilibrate/rocsparse_dnvec_rsqrt.cpp
+  src/generic/spequilibrate/rocsparse_dnvec_hadamard.cpp
+  src/generic/spequilibrate/rocsparse_dnvec_inv.cpp
+  src/generic/spequilibrate/rocsparse_spequilibrate_ruiz.cpp
+  
 # Reordering
   src/reordering/rocsparse_csrcolor.cpp
 

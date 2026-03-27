@@ -1,6 +1,5 @@
-/*! \file */
 /* ************************************************************************
- * Copyright (C) 2025 Advanced Micro Devices, Inc. All rights Reserved.
+ * Copyright (C) 2026 Advanced Micro Devices, Inc. All rights Reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -22,32 +21,19 @@
  *
  * ************************************************************************ */
 
-#pragma once
+#include "test.hpp"
+#include "testing_spequilibrate.hpp"
 
-#include "rocsparse-types.h"
-
-namespace rocsparse
-{
-
-    template <typename T>
-    rocsparse_status assign_async(int64_t n, T* dest, T value, hipStream_t stream);
-
-    rocsparse_status
-        assign_max_async(int64_t n, rocsparse_indextype indextype, void* dest, hipStream_t stream);
-
-
-  rocsparse_status gassign_async_one(int64_t batch_count,
-				     int64_t n,
-				     rocsparse_datatype datatype,
-				     void* dest,
-				     int64_t inc,
-				     hipStream_t stream);
-
-  rocsparse_status gassign_async_zero(int64_t batch_count,
-				      int64_t n,
-				      rocsparse_datatype datatype,
-				      void* dest,
-				      int64_t inc,
-				      hipStream_t stream);
-  
-}
+TEST_ROUTINE_WITH_CONFIG(spequilibrate,
+                         level2,
+                         rocsparse_test_config_ijt,
+                         arg.M,
+                         arg.N,
+                         arg.alpha,
+                         arg.alphai,
+                         arg.transA,
+                         arg.baseA,
+                         arg.diag,
+                         arg.uplo,
+                         arg.spequilibrate_alg,
+                         arg.matrix);

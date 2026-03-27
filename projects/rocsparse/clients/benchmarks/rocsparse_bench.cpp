@@ -93,6 +93,7 @@ void rocsparse_bench::parse(int& argc, char**& argv, rocsparse_arguments_config&
     config.spsv_alg            = rocsparse_spsv_alg_default;
     config.sptrsv_alg          = rocsparse_sptrsv_alg_default;
     config.spitsv_alg          = rocsparse_spitsv_alg_default;
+    config.spequilibrate_alg   = rocsparse_spequilibrate_alg_ruiz;
     config.spsm_alg            = rocsparse_spsm_alg_default;
     config.sptrsm_alg          = rocsparse_sptrsm_alg_default;
     config.spmm_alg            = rocsparse_spmm_alg_default;

@@ -114,6 +114,7 @@ struct Arguments
     rocsparse_spsv_alg             spsv_alg;
     rocsparse_sptrsv_alg           sptrsv_alg;
     rocsparse_spitsv_alg           spitsv_alg;
+    rocsparse_spequilibrate_alg    spequilibrate_alg;
     rocsparse_spsm_alg             spsm_alg;
     rocsparse_sptrsm_alg           sptrsm_alg;
     rocsparse_spmm_alg             spmm_alg;
@@ -270,6 +271,7 @@ struct Arguments
         ROCSPARSE_FORMAT_CHECK(spsv_alg);
         ROCSPARSE_FORMAT_CHECK(sptrsv_alg);
         ROCSPARSE_FORMAT_CHECK(spitsv_alg);
+        ROCSPARSE_FORMAT_CHECK(spequilibrate_alg);
         ROCSPARSE_FORMAT_CHECK(spsm_alg);
         ROCSPARSE_FORMAT_CHECK(sptrsm_alg);
         ROCSPARSE_FORMAT_CHECK(spmm_alg);
@@ -504,6 +506,7 @@ private:
         print("spsv_alg", rocsparse_spsvalg2string(arg.spsv_alg));
         print("sptrsv_alg", rocsparse_sptrsvalg2string(arg.sptrsv_alg));
         print("spitsv_alg", rocsparse_spitsvalg2string(arg.spitsv_alg));
+        print("spequilibrate_alg", rocsparse_spequilibratealg2string(arg.spequilibrate_alg));
         print("spsm_alg", rocsparse_spsmalg2string(arg.spsm_alg));
         print("sptrsm_alg", rocsparse_sptrsmalg2string(arg.sptrsm_alg));
         print("spmm_alg", rocsparse_spmmalg2string(arg.spmm_alg));

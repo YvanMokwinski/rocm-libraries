@@ -76,6 +76,8 @@ ROCSPARSE_TEST_NAME_SUFFIX_GENERATOR_PRINT_SPECIALIZE(rocsparse_sptrsv_alg,
                                                       rocsparse_sptrsvalg2string);
 ROCSPARSE_TEST_NAME_SUFFIX_GENERATOR_PRINT_SPECIALIZE(rocsparse_spitsv_alg,
                                                       rocsparse_spitsvalg2string);
+ROCSPARSE_TEST_NAME_SUFFIX_GENERATOR_PRINT_SPECIALIZE(rocsparse_spequilibrate_alg,
+                                                      rocsparse_spequilibratealg2string);
 ROCSPARSE_TEST_NAME_SUFFIX_GENERATOR_PRINT_SPECIALIZE(rocsparse_spsm_alg, rocsparse_spsmalg2string);
 ROCSPARSE_TEST_NAME_SUFFIX_GENERATOR_PRINT_SPECIALIZE(rocsparse_sptrsm_alg,
                                                       rocsparse_sptrsmalg2string);
