@@ -1,5 +1,6 @@
+/*! \file */
 /* ************************************************************************
-* Copyright (C) 2020-2023 Advanced Micro Devices, Inc. All rights Reserved.
+* Copyright (C) 2025 Advanced Micro Devices, Inc. All rights Reserved.
 *
 * Permission is hereby granted, free of charge, to any person obtaining a copy
 * of this software and associated documentation files (the "Software"), to deal
@@ -22,22 +23,14 @@
 * ************************************************************************ */
 
 /*! \file
-*  \brief rocsparse-functions.h provides Sparse Linear Algebra Subprograms
-*  of Level 1, 2 and 3, using HIP optimized for AMD GPU hardware.
+*  \brief rocsparse-itsol.h provides Iterative Sparse Linear Solvers with an RCI interface.
 */
+#ifndef ROCSPARSEITSOL_H
+#define ROCSPARSEITSOL_H
 
-#ifndef ROCSPARSE_FUNCTIONS_H
-#define ROCSPARSE_FUNCTIONS_H
+#include "itsol/rocsparse_itsol.h"
+#include "itsol/rocsparse_itsol_bicgstab.h"
+#include "itsol/rocsparse_itsol_cg.h"
+#include "itsol/rocsparse_itsol_fgmres.h"
 
-#include "internal/rocsparse-conversion.h"
-#include "internal/rocsparse-extra.h"
-#include "internal/rocsparse-generic.h"
-#include "internal/rocsparse-level1.h"
-#include "internal/rocsparse-level2.h"
-#include "internal/rocsparse-level3.h"
-#include "internal/rocsparse-precond.h"
-#include "internal/rocsparse-itsol.h"
-#include "internal/rocsparse-reordering.h"
-#include "internal/rocsparse-util.h"
-
-#endif /* ROCSPARSE_FUNCTIONS_H */
+#endif

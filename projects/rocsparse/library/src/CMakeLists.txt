@@ -463,6 +463,21 @@ set(rocsparse_source
   src/precond/itilu0/rocsparse_csritilu0_sync_split.cpp
   src/precond/itilu0/rocsparse_csritilu0_sync_split_fusion.cpp
 
+# Iterative solvers
+  src/itsol/rocsparse_scalar.cpp
+  src/itsol/rocsparse_itsol.cpp
+  src/itsol/rocsparse_itsol_inputs.cpp
+  src/itsol/rocsparse_itsol_outputs.cpp
+  src/itsol/cg/rocsparse_itsol_cg.cpp
+  src/itsol/cg/rocsparse_itsol_cg_inputs.cpp
+  src/itsol/cg/rocsparse_itsol_cg_outputs.cpp
+  src/itsol/fgmres/rocsparse_itsol_fgmres.cpp
+  src/itsol/fgmres/rocsparse_itsol_fgmres_inputs.cpp
+  src/itsol/fgmres/rocsparse_itsol_fgmres_outputs.cpp
+  src/itsol/bicgstab/rocsparse_itsol_bicgstab.cpp
+  src/itsol/bicgstab/rocsparse_itsol_bicgstab_inputs.cpp
+  src/itsol/bicgstab/rocsparse_itsol_bicgstab_outputs.cpp
+  
 # Conversion
   src/conversion/rocsparse_calculate_nnz.cpp
   src/conversion/rocsparse_nnz.cpp

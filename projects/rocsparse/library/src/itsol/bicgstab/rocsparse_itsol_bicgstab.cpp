@@ -1,0 +1,710 @@
+#include "rocsparse_itsol_bicgstab.hpp"
+#include <iostream>
+#include "control.h"
+#define PRINT_VEC(MSG,H)std::cout << MSG << std::endl;	    do {double tmp[2]; \
+	      hipMemcpy(tmp,H,sizeof(double)*2,hipMemcpyDefault);\
+	    std::cout << "   "#MSG"[0]" << *tmp << std::endl;\
+	    std::cout << "   "#MSG"[1]" << tmp[1]<< std::endl;\
+	    } while(false)
+
+#define PRINT_VEC2(MSG,H)std::cout << MSG << std::endl;	    do {double *tmp = new double[dimension]; \
+	      hipMemcpy(tmp,H,sizeof(double)*dimension,hipMemcpyDefault);\
+	      for (int i=0;i<dimension;++i)std::cout << "   "#MSG"["<<i<<"]" << *(tmp+i) << std::endl; \
+	    } while(false)
+
+//#undef PRINT_VEC
+//#define PRINT_VEC(MSG,H) (void)0
+#undef PRINT_VEC2
+#define PRINT_VEC2(MSG,H) (void)0
+
+#define HIP_CHECK(call)						\
+  do {								\
+    hipError_t status = call;					\
+    if (status != hipSuccess) {					\
+      std::cerr << "HIP error: " << hipGetErrorString(status)	\
+		<< " at line " << __LINE__ << std::endl;	\
+      std::exit(1);						\
+    }								\
+  } while(0)
+
+rocsparse_itsol_bicgstab_descr_::rocsparse_itsol_bicgstab_descr_(rocsparse_itsol_descr that)
+  : rocsparse_itsol_impl_(rocsparse_itsol_alg_bicgstab)
+  , m_outputs(new rocsparse_bicgstab_outputs_())
+  , m_inputs(new rocsparse_bicgstab_inputs_())
+  , m_itsol(that)
+{
+  that->set_request(rocsparse_itsol_request_matrix_vector);
+}
+
+
+rocsparse_itsol_bicgstab_descr_::~rocsparse_itsol_bicgstab_descr_()
+{
+  if (this->m_outputs)
+    delete this->m_outputs;
+  this->m_outputs = nullptr;
+  if (this->m_inputs)
+    delete this->m_inputs;
+  this->m_inputs = nullptr;
+  
+  (void)hipFree(this->r);
+  (void)hipFree(this->p);
+}
+
+
+static hipError_t  hipMalloc(void**that,rocsparse_datatype datatype,size_t nelm)
+{
+     switch(datatype)
+       {
+       case rocsparse_datatype_f32_r:
+	 {
+	   return hipMalloc(that,sizeof(float) *  nelm);
+	  }
+	case rocsparse_datatype_f32_c:
+	  {
+	    return hipMalloc(that,sizeof(float)*2*  nelm);
+	  }
+	case rocsparse_datatype_f64_r:
+	  {
+	    return hipMalloc(that,sizeof(double) *  nelm);
+	  }
+	case rocsparse_datatype_f64_c:
+	  {
+	    return hipMalloc(that,sizeof(double)*2*  nelm);
+	  }
+       case rocsparse_datatype_i32_r:
+	 {
+	    return hipMalloc(that,sizeof(int32_t)*  nelm);
+	 }
+       case rocsparse_datatype_u32_r:
+	 {
+	    return hipMalloc(that,sizeof(uint32_t)*  nelm);
+	 }
+       case rocsparse_datatype_i8_r:
+	 {
+	    return hipMalloc(that,sizeof(int8_t)*  nelm);
+	 }
+       case rocsparse_datatype_u8_r:
+	 {
+	    return hipMalloc(that,sizeof(uint8_t)*  nelm);
+	 }
+	}
+}
+
+
+static hipError_t  hipMemcpy(void*dst,const void * src,rocsparse_datatype datatype,size_t nelm)
+{
+     switch(datatype)
+       {
+       case rocsparse_datatype_f32_r:
+	 {
+	   return hipMemcpy(dst,src,sizeof(float) *  nelm,hipMemcpyDefault);
+	  }
+	case rocsparse_datatype_f32_c:
+	  {
+	    return hipMemcpy(dst,src,sizeof(float)*2*  nelm,hipMemcpyDefault);
+	  }
+	case rocsparse_datatype_f64_r:
+	  {
+	    return hipMemcpy(dst,src,sizeof(double) *  nelm,hipMemcpyDefault);
+	  }
+	case rocsparse_datatype_f64_c:
+	  {
+	    return hipMemcpy(dst,src,sizeof(double)*2*  nelm,hipMemcpyDefault);
+	  }
+       case rocsparse_datatype_i32_r:
+	 {
+	    return hipMemcpy(dst,src,sizeof(int32_t)*  nelm,hipMemcpyDefault);
+	 }
+       case rocsparse_datatype_u32_r:
+	 {
+	    return hipMemcpy(dst,src,sizeof(uint32_t)*  nelm,hipMemcpyDefault);
+	 }
+       case rocsparse_datatype_i8_r:
+	 {
+	    return hipMemcpy(dst,src,sizeof(int8_t)*  nelm,hipMemcpyDefault);
+	 }
+       case rocsparse_datatype_u8_r:
+	 {
+	   return hipMemcpy(dst,src,sizeof(uint8_t)*  nelm, hipMemcpyDefault);
+	 }
+	}
+}
+
+
+void * rocsparse_itsol_bicgstab_descr_::get_p()
+{
+  if (this->p == nullptr)
+    {
+      const auto inputs = this->m_itsol->get_inputs();
+      const auto datatype_compute = inputs->get_datatype_compute();
+      const int64_t dimension = inputs->get_dimension();
+      THROW_IF_HIP_ERROR(hipMalloc(&this->p,datatype_compute,  dimension));
+    }
+  return this->p;
+}
+
+void * rocsparse_itsol_bicgstab_descr_::get_t()
+{
+  if (this->t == nullptr)
+    {
+      const auto inputs = this->m_itsol->get_inputs();
+      const auto datatype_compute = inputs->get_datatype_compute();
+      const int64_t dimension = inputs->get_dimension();
+      THROW_IF_HIP_ERROR(hipMalloc(&this->t,datatype_compute,  dimension));
+    }
+  return this->t;
+}
+
+void * rocsparse_itsol_bicgstab_descr_::get_z()
+{
+  if (this->z == nullptr)
+    {
+      const auto inputs = this->m_itsol->get_inputs();
+      const auto datatype_compute = inputs->get_datatype_compute();
+      const int64_t dimension = inputs->get_dimension();
+      THROW_IF_HIP_ERROR(hipMalloc(&this->z,datatype_compute,  dimension));
+    }
+  return this->z;
+}
+
+void * rocsparse_itsol_bicgstab_descr_::get_v()
+{
+  if (this->v == nullptr)
+    {
+      const auto inputs = this->m_itsol->get_inputs();
+      const auto datatype_compute = inputs->get_datatype_compute();
+      const int64_t dimension = inputs->get_dimension();
+      THROW_IF_HIP_ERROR(hipMalloc(&this->v,datatype_compute,  dimension));
+    }
+  return this->v;
+}
+
+void * rocsparse_itsol_bicgstab_descr_::get_q()
+{
+  if (this->q == nullptr)
+    {
+      const auto inputs = this->m_itsol->get_inputs();
+      const auto datatype_compute = inputs->get_datatype_compute();
+      const int64_t dimension = inputs->get_dimension();
+      THROW_IF_HIP_ERROR(hipMalloc(&this->q,datatype_compute,  dimension));
+    }
+  return this->q;
+}
+
+void * rocsparse_itsol_bicgstab_descr_::get_r0()
+{
+  if (this->r0 == nullptr)
+    {
+      const auto inputs = this->m_itsol->get_inputs();
+      const auto datatype_compute = inputs->get_datatype_compute();
+      const int64_t dimension = inputs->get_dimension();
+      THROW_IF_HIP_ERROR(hipMalloc(&this->r0,datatype_compute,  dimension));
+    }
+  return this->r0;
+}
+
+
+void * rocsparse_itsol_bicgstab_descr_::get_r()
+{
+  if (this->r == nullptr)
+    {
+      const auto inputs = this->m_itsol->get_inputs();
+      const auto datatype_compute = inputs->get_datatype_compute();
+      const int64_t dimension = inputs->get_dimension();
+      THROW_IF_HIP_ERROR(hipMalloc(&this->r,datatype_compute,  dimension));
+    }
+  return this->r;
+}
+
+rocsparse_status rocsparse_itsol_bicgstab_descr_::buffer_size(rocsparse_handle handle,
+							rocsparse_itsol_descr  descr,
+							size_t*buffer_size)
+{
+      const auto inputs = this->m_itsol->get_inputs();
+  const auto datatype_compute = inputs->get_datatype_compute();
+  const int64_t dimension = inputs->get_dimension();
+  
+      switch(datatype_compute)
+	{
+      case rocsparse_datatype_i32_r:
+      case rocsparse_datatype_u32_r:
+	{
+	  buffer_size[0] = dimension * sizeof(int32_t);
+	  break;
+	}
+      case rocsparse_datatype_i8_r:
+      case rocsparse_datatype_u8_r:
+	{
+	  buffer_size[0] = dimension * sizeof(int8_t);
+	  break;
+	}
+	case rocsparse_datatype_f32_r:
+	  {
+	    buffer_size[0] = dimension * sizeof(float);
+	    break;
+	  }
+	case rocsparse_datatype_f32_c:
+	  {
+	    buffer_size[0] = dimension * sizeof(float)*2;
+	    break;
+	  }
+	case rocsparse_datatype_f64_r:
+	  {
+	    buffer_size[0] = dimension * sizeof(double);
+	    break;
+	  }
+	case rocsparse_datatype_f64_c:
+	  {
+	    buffer_size[0] = dimension * sizeof(double)*2;
+	    break;
+	  }
+	}
+
+  return rocsparse_status_success;
+}
+  
+
+rocsparse_status rocsparse_itsol_bicgstab_descr_::set_input(rocsparse_itsol_bicgstab_input that,
+						      const void * data,
+						      size_t size)
+{  
+  return this->get_inputs()->set(that,data,size);
+}
+
+
+rocsparse_status rocsparse_itsol_bicgstab_descr_::get_input(rocsparse_itsol_bicgstab_input that,
+						      void * data,
+						      size_t size)
+{  
+  return this->get_inputs()->get(that,data,size);
+}
+
+
+rocsparse_status rocsparse_itsol_bicgstab_descr_::set_output(rocsparse_itsol_bicgstab_output that,
+						       const void * data,
+						       size_t size)
+{  
+  return this->m_outputs->set(that,data,size);
+}
+
+  
+rocsparse_status rocsparse_itsol_bicgstab_descr_::get_output(rocsparse_itsol_bicgstab_output that,
+						       void * data,
+						       size_t size)
+{  
+  return this->m_outputs->get(that,data,size);
+}
+
+extern "C"   rocsparse_status rocsparse_itsol_bicgstab_set_input(rocsparse_handle handle,
+								rocsparse_itsol_descr descr,
+							   rocsparse_itsol_bicgstab_input input,
+							   const void * data,
+							   size_t size)
+{
+  ((rocsparse_itsol_bicgstab_descr_*)descr->get_impl())->set_input(input, data,size);
+  return rocsparse_status_success;
+}
+
+extern "C"   rocsparse_status rocsparse_itsol_bicgstab_get_input(rocsparse_handle handle,
+								rocsparse_itsol_descr descr,
+							   rocsparse_itsol_bicgstab_input input,
+							   void * data,
+							   size_t size)
+{
+  ((rocsparse_itsol_bicgstab_descr_*)descr->get_impl())->get_input(input, data,size);
+  return rocsparse_status_success;
+}
+
+extern "C" rocsparse_status rocsparse_itsol_bicgstab_get_output(rocsparse_handle handle,
+						rocsparse_itsol_descr descr,
+							  rocsparse_itsol_bicgstab_output output,
+							  void * data,
+							  size_t size)
+{
+  ((rocsparse_itsol_bicgstab_descr_*)descr->get_impl())->get_output(output, data,size);
+  return rocsparse_status_success;
+}
+
+
+
+ rocsparse_status rocsparse_itsol_bicgstab_descr_::run(rocsparse_handle handle,
+								rocsparse_itsol_descr descr,
+						 const void * b,
+						 void * x,	    
+						 size_t buffer_size,
+						 void * buffer)
+ {
+	  hipDeviceSynchronize();
+
+  if (this->m_initialized == false)
+    {
+      const rocsparse_datatype datatype = descr->get_inputs()->get_datatype_compute();
+      this->m_alpha.set_datatype(datatype);
+      this->m_beta.set_datatype(datatype);
+      this->m_beta_nom.set_datatype(datatype);
+      this->m_beta_denom.set_datatype(datatype);
+      this->m_alpha_nom.set_datatype(datatype);
+      this->m_alpha_denom.set_datatype(datatype);
+      this->m_omega.set_datatype(datatype);
+      this->m_omega_nom.set_datatype(datatype);
+      this->m_omega_denom.set_datatype(datatype);
+      this->m_rho.set_datatype(datatype);
+      this->m_rho_old.set_datatype(datatype);
+      this->m_scalar.set_datatype(datatype);
+      this->m_one.set_datatype(datatype);
+      this->m_negative_one.set_datatype(datatype);
+	 
+      this->m_one.one();
+      this->m_negative_one.negative_one();
+      this->m_initialized = true;
+    }
+  
+  void * r = this->get_r();
+  void * r0 = this->get_r0();
+  void * p = this->get_p();
+  void * q = this->get_q();
+  void * t = this->get_t();
+  void * v = this->get_v();
+  void * z = this->get_z();
+  
+  auto outputs = descr->get_outputs();
+  auto inputs = descr->get_inputs();
+  const auto datatype = inputs->get_datatype_compute();
+  const int64_t dimension = inputs->get_dimension();
+  static constexpr bool log = false;
+  if (log)
+    {
+      //rocsparse_itsol_request_get_name(descr->get_request())
+      rocsparse_itsol_request request;
+      descr->get_request(&request);
+      std::cout << "iter " <<   outputs->get_niter() << " "  <<  request << std::endl;
+    }
+  
+  for (;;)
+    {
+      // 1. r0 = b - Ax0
+      // 2. r1 = arbitrary from r0
+      // 3. rho0 = dot(r1,r0)
+      // 4. p0 = r0
+      // 5. y = inv(P) * p0
+      // loop i>=1
+      //   loop-2: v = A * y
+      //   loop-3: alpha = rho_old / dot(r1,v)
+      //   loop-4: h = x_old + alpha y
+      //   loop-5: s = r_old - alpha v
+      //   loop-6: if (h accurate) x = h; return;
+      //   loop-7: z = inv(P) * s
+      //   loop-8: t = A * z
+      //   loop-9: omega = dot(inv(L) t, inv(L)s) /  dot(inv(L) t, inv(L)t)
+      //   loop-10: x  = h + omega * z
+      //   loop-11: r  = s - omega * t
+      //   loop-12: if (x accurate) return
+      //   loop-13: rho = (r1,r)
+      //   loop-14: beta = (rho/rho_old) * (alpha/omega)
+      //   loop-15: p = r + beta(p_old - omega v)
+      //   loop-16: y = inv(P) * p
+
+      // 1. r0 = b - Ax0
+      // 2. r1 = arbitrary from r0
+      // 3. rho_old = dot(r1,r0)
+      // 4. p0 = r0
+      // 5. y = inv(P) * p0
+      // loop i>=1
+      //   loop-2: v = A * y
+      //   loop-3: alpha = rho_old / dot(r1,v)
+      //   loop-4: x = x + alpha y
+      //   loop-5: r = r - alpha v
+      //   loop-6: if (h accurate) x = h; return;
+      //   loop-7: z = inv(P) * s
+      //   loop-8: t = A * z
+      //   loop-9: omega = dot(inv(L) t, inv(L)s) /  dot(inv(L) t, inv(L)t)
+      //   loop-10: x = x + omega * z
+      //   loop-11: r = r - omega * t
+      //   loop-12: if (x accurate) return
+      //   loop-13: rho = (r1,r)
+      //   loop-14: beta = (rho/rho_old) * (alpha/omega)
+      //   loop-15: p = r + beta * p
+      //   loop-16: p = p - beta * omega v
+      //   loop-17: y = inv(P) * p
+		//	    std::cout << "   "#MSG"[2]" << tmp[2]<< std::endl; 
+
+      switch(this->m_internal_state)
+	{      
+	case rocsparse_bicgstab_internal_state_initial:
+	  {
+#define PRINT_STATE(MSG)	    std::cout << "### state " << MSG << std::endl;
+	    #undef PRINT_STATE
+	    #define PRINT_STATE(MSG) (void)0
+	    outputs->set_niter(0);
+	    PRINT_STATE("INITIAL");
+	    return this->request(rocsparse_itsol_request_matrix_vector,
+				 x,
+				 r0,
+				 rocsparse_bicgstab_internal_state_init_mv);	    	    
+	    break;
+	  }
+	  
+	case rocsparse_bicgstab_internal_state_init_mv:
+	  {
+	    
+	    // r0 = A*x is computed.
+	    //	    this->m_one.print("one");
+	    //	    this->m_negative_one.print("-one");
+	    descr->axpy2(handle, this->m_one, b, this->m_negative_one, r0);
+
+	    //	    PRINT_VEC("b",b);
+	    //	    PRINT_VEC("x",x);
+	    //	    PRINT_VEC("r0=b-A*x",r0);
+	    
+	    //	    double nrm = descr->nrm2(handle,r0);
+	    //	    std::cout << "initial residual " << nrm << std::endl;
+	    //	    exit(1);
+	    // Execute
+	    // 2. r1 = r0
+	    // 3. rho0 = dot(r1,r0)
+	    // 4. p0 = r0
+	    descr->dot_product(handle,r0,r0,this->m_rho);
+	    //	    this->m_rho = this->m_rho_old;
+	    //	    this->m_rho.print("RHO0");
+	    hipMemcpy(p,r0,datatype, dimension);
+	    hipMemcpy(r,r0,datatype, dimension);
+	    //	    hipMemset(r0,0,dimension*sizeof(double));
+	    
+#if 0
+	    double h = 1.0/descr->nrm2(handle,r0);
+	    for (int i=0;i<dimension;++i)
+	      {		
+		double e;
+		hipMemcpy(&e,((double*)r0)+i,sizeof(double),hipMemcpyDefault);
+		e *=h;
+		hipMemcpy(((double*)r0)+i,&h,sizeof(double),hipMemcpyDefault);
+	      }
+#endif
+	    return this->request(rocsparse_itsol_request_preconditioner,
+				 r,
+				 z,
+				 rocsparse_bicgstab_internal_state_init_prec);  
+	  }
+	case rocsparse_bicgstab_internal_state_init_prec:
+	  {
+	    //	    PRINT_VEC("z0 = inv(P) * r : r", this->get_itsol()->get_in());
+	    //	    PRINT_VEC("z0 = inv(P) * r : z", this->get_itsol()->get_out());
+
+	    //   loop-1: z = inv(P) * r is computed	    
+	    outputs->set_niter(1);		
+	    return this->request(rocsparse_itsol_request_matrix_vector,
+				 z,
+				 q,
+				 rocsparse_bicgstab_internal_state_iter_mv); 	    
+	    break;
+	  }
+	  
+	case rocsparse_bicgstab_internal_state_iter_mv:
+	  {
+	    //	    PRINT_VEC("q = A*z : z",this->get_itsol()->get_in());
+	    //	    PRINT_VEC("q = A*z : q",this->get_itsol()->get_out());
+	    //   loop-2: v = A * y is computed
+	    
+	    //   loop-3: alpha = rho_old / dot(r1,v)
+	    descr->dot_product(handle,r0,q,this->m_alpha_denom);
+	    //	    	    this->m_alpha_denom.print("alpha_denom");
+	    
+	    this->m_alpha.divide(this->m_rho, this->m_alpha_denom);
+	    //	    this->m_alpha.print("alpha");
+	    //	    exit(1);
+	    //   loop-5: r = r - alpha v
+	    this->m_alpha.negate();
+	    //	    this->m_alpha.print("alpha");
+
+	    descr->axpy(handle,this->m_alpha,q, r);
+	    this->m_alpha.negate();
+	    //   loop-6: if (h accurate) x = h; return;
+#if 0
+	    double nrm = descr->nrm2(handle,r);
+	    
+	    std::cout << "nrm " << nrm << std::endl;
+	    const double tolerance = inputs->get_tolerance();
+	    if (nrm <= tolerance)
+	      {
+		hipMemcpy(x,z,datatype, dimension);
+
+		descr->set_request(rocsparse_itsol_request_finished);
+		return rocsparse_status_success;
+	      }
+#endif
+	    return this->request(rocsparse_itsol_request_preconditioner,
+				 r,
+				 v,
+				 rocsparse_bicgstab_internal_state_iter_prec);	    	    
+	    
+	    break;
+	  }
+	case rocsparse_bicgstab_internal_state_iter_prec:
+	  {
+	    //	    PRINT_VEC("v = inv(P) * r : r", this->get_itsol()->get_in());
+	    //PRINT_VEC("v = inv(P) * r : v", this->get_itsol()->get_out());
+	    //   loop-7: z = inv(P) * s is computed
+	    return this->request(rocsparse_itsol_request_matrix_vector,
+				 v,
+				 t,
+				 rocsparse_bicgstab_internal_state_iter_mv_1);	    	    
+	  }
+	  
+	case rocsparse_bicgstab_internal_state_iter_mv_1:
+	  {
+	    //	    PRINT_VEC("t = A*v  : v", this->get_itsol()->get_in());
+	    //	    PRINT_VEC("t = A*v  : t", this->get_itsol()->get_out());
+	    
+	    //   loop-8: t = A * z is computed
+
+	    //   loop-9: omega = dot(inv(L) t, inv(L)s) /  dot(inv(L) t, inv(L)t)
+	    descr->dot_product(handle,t,r,this->m_omega_nom);
+	    //std::cout << "aaaaaaa " << __LINE__ <<  std::endl;
+	    //	    PRINT_VEC2("q",q);
+	    //	    PRINT_VEC2("ttt ",v);
+	    descr->dot_product(handle,t,t,this->m_omega_denom);
+	    //std::cout << "aaaaaaa " << __LINE__ <<  std::endl;
+	    this->m_omega.divide(this->m_omega_nom,this->m_omega_denom);
+	    //std::cout << "aaaaaaa " << __LINE__ <<  std::endl;
+	    //	    	    this->m_omega_nom.print("omega_nom");
+	    //	    	    this->m_omega_denom.print("omega_denom");
+	    //	    	    this->m_omega.print("omega");
+	    //
+	    //std::cout << "aaaaaaa " << __LINE__ <<  std::endl;
+	    double * po = m_omega;
+	    //std::cout << "aaaaaaa " << __LINE__ <<  std::endl;
+            if((std::abs(*po) == std::numeric_limits<double>::infinity()) || (*po != *po)
+               || (*po == static_cast<double>(0)))
+	      {
+		std::cout << "BiCGStab omega == 0 || Nan || Inf !!! Updated solution only in p-direction" << std::endl;
+		//		PRINT_VEC("final before  x",x);
+		//		hipMemcpy(x,z,datatype, dimension);
+		descr->axpy(handle,this->m_alpha,z,x);
+		//PRINT_VEC("final x",x);
+		
+		return this->request(rocsparse_itsol_request_matrix_vector,
+				     x,
+				     p,
+				     rocsparse_bicgstab_internal_state_finalize_break);	    	    
+
+            }
+	    //std::cout << "aaaaaaa " << __LINE__ <<  std::endl;
+
+	    
+	    //   loop-4: x = x + alpha z + omega * v
+	    //	    hipMemcpy(x,v,datatype, dimension);
+	    //	    descr->axpy2(handle,m_alpha,z,m_omega,x);
+	    //	    this->m_alpha.print("alpha");
+	    //	    this->m_omega.print("omega");
+
+	    //std::cout << "aaaaaaa " << __LINE__ <<  std::endl;
+	    descr->axpy(handle,this->m_alpha,z, x);
+	    //std::cout << "aaaaaaa " << __LINE__ <<  std::endl;
+	    descr->axpy(handle,this->m_omega,v, x);
+	    //std::cout << "aaaaaaa " << __LINE__ <<  std::endl;
+	    //	    PRINT_VEC("z : ", z);
+	    //	    PRINT_VEC("v : ", v);
+	    //	    PRINT_VEC("x : ", x);
+
+	    //   loop-11: r  = r - omega * t
+	    //	    PRINT_VEC("before : ", r);
+	    //	    PRINT_VEC("addig t : ", t);
+	    //std::cout << "aaaaaaa " << __LINE__ <<  std::endl;
+	    this->m_omega.negate();
+	    //std::cout << "aaaaaaa " << __LINE__ <<  std::endl;
+	    //	    this->m_omega.print("with omega = ");
+	    //	    PRINT_VEC("gggggggggg AV : ", r);
+	    //	    PRINT_VEC("gggggggggg AV : ", t);
+	    //std::cout << "aaaaaaa " << __LINE__ <<  std::endl;
+	    descr->axpy(handle,this->m_omega,t,r);
+	    //std::cout << "aaaaaaa " << __LINE__ <<  std::endl;
+	    //	    PRINT_VEC("gggggggggg AP : ", r);
+	    //	    PRINT_VEC("gggggggggg AP : ", t);
+	    //std::cout << "aaaaaaa " << __LINE__ <<  std::endl;
+	    this->m_omega.negate();
+	    //std::cout << "aaaaaaa " << __LINE__ <<  std::endl;
+
+	    
+	    //   loop-12: if (x accurate) return
+	    double nrm, nrm0;
+	    descr->nrm2(handle,r, &nrm);
+	    //	    descr->nrm2(handle,r0, &nrm0);
+	    //	    nrm  =nrm / nrm0;
+	    std::cout << outputs->get_niter()  << " " <<  nrm << std::endl;
+
+	    const double tolerance = inputs->get_tolerance();
+	    if (nrm < tolerance)
+	      {
+		descr->set_request(rocsparse_itsol_request_finished);
+		return rocsparse_status_success;
+	      }
+	    //std::cout << "aaaaaaa " << __LINE__ <<  std::endl;
+
+	    
+	    //   loop-13: rho = (r1,r)
+	    this->m_rho_old = this->m_rho;
+	    descr->dot_product(handle,r0,r,this->m_rho);
+	    //	    this->m_rho.print("RHO");
+	    //	    this->m_rho_old.print("RHOOLD");
+
+	    //	    std::cout << "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa " << __LINE__ <<  std::endl;
+	    //   loop-14: beta = (rho/rho_old) * (alpha/omega)
+	    this->m_beta_nom.divide(this->m_rho,this->m_rho_old);
+	    this->m_beta_denom.divide(this->m_alpha,this->m_omega);
+	    //	    this->m_beta_nom.print("beta nom");
+	    //	    this->m_beta_denom.print("beta denonom");
+	    this->m_beta.multiply(this->m_beta_nom,this->m_beta_denom);
+	    
+	    //std::cout << "aaaaaaa " << __LINE__ <<  std::endl;
+	    //	    	    this->m_beta.print("BETA");
+	    //   loop-15: p = r + beta(p_old - omega v) is calculated
+	    this->m_scalar.multiply(this->m_beta,this->m_omega);
+	    this->m_scalar.negate();
+	    descr->axpy2(handle,this->m_scalar,v,m_beta,p);	    
+	    descr->axpy(handle,this->m_one,r,p);	  
+	    
+	    //std::cout << "aaaaaaa " << __LINE__ <<  std::endl;
+	    //std::cout << "aaaaaaa " << __LINE__ <<  std::endl;
+	    return this->request(rocsparse_itsol_request_preconditioner,
+				 p,
+				 z,
+				 rocsparse_bicgstab_internal_state_post_iteration);	    	    
+	    
+	    break;
+	  }
+	case rocsparse_bicgstab_internal_state_finalize_break:
+	  {
+	    descr->axpy2(handle, this->m_one, b, this->m_negative_one, p);
+	    double nrm;
+	    descr->nrm2(handle,p, &nrm);
+	    const double tolerance = inputs->get_tolerance();
+	    if (nrm < tolerance)
+	      {
+		std::cout << "aaaaaaa " << __LINE__ <<  std::endl;
+
+		descr->set_request(rocsparse_itsol_request_finished);
+		return rocsparse_status_success;
+	      }
+	    return rocsparse_status_success;
+	  }
+
+	case rocsparse_bicgstab_internal_state_post_iteration:
+	  {
+	    //	    PRINT_VEC("z = inv(P)*p",z);
+	    outputs->set_niter(outputs->get_niter()+1);		
+	    if(outputs->get_niter() >= inputs->get_nmaxiter())
+	      {
+		descr->set_request(rocsparse_itsol_request_finished);
+		  return rocsparse_status_success;
+	      }
+	    return this->request(rocsparse_itsol_request_matrix_vector,
+				 z,
+				 q,
+				 rocsparse_bicgstab_internal_state_iter_mv);	    	    
+	  }
+	}
+    }
+
+  return rocsparse_status_success;
+}
+
