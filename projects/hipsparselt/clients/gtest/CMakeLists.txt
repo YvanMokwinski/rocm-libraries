@@ -90,7 +90,12 @@ list( APPEND COMMON_LINK_LIBS "-lm -lstdc++fs")
 if (CMAKE_Fortran_COMPILER_ID MATCHES "GNU")
   list( APPEND COMMON_LINK_LIBS "-lgfortran") # for lapack
 else()
-  list( APPEND COMMON_LINK_LIBS "-lFortranRuntime -lFortranDecimal") # for lapack
+  find_library(FortranRuntime NAMES FortranRuntime PATH ${HIP_CLANG_ROOT}/lib)
+  if ( ${FortranRuntime} STREQUAL "FortranRuntime-NOTFOUND" )
+    list( APPEND COMMON_LINK_LIBS "-lflang_rt.runtime") # for lapack
+  else()
+    list( APPEND COMMON_LINK_LIBS "-lFortranRuntime -lFortranDecimal") # for lapack
+  endif()
 endif()
 
 #if (NOT WIN32)
@@ -111,10 +116,15 @@ set_target_properties( hipsparselt-test PROPERTIES
   LINKER_LANGUAGE CXX
   RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/staging"
 )
+set_target_properties( hipsparselt-test PROPERTIES BUILD_RPATH_USE_ORIGIN TRUE)
+set_target_properties( hipsparselt-test PROPERTIES
+  BUILD_RPATH "${HIP_CLANG_ROOT}/lib"
+  INSTALL_RPATH "$ORIGIN/../llvm/lib"
+)
 
 set( HIPSPARSELT_TEST_DATA "${PROJECT_BINARY_DIR}/staging/hipsparselt_gtest.data")
 add_custom_command( OUTPUT "${HIPSPARSELT_TEST_DATA}"
-                    COMMAND ${python} ../common/hipsparselt_gentest.py -I ../include hipsparselt_gtest.yaml -o "${HIPSPARSELT_TEST_DATA}"
+                    COMMAND ${Python3_EXECUTABLE} ../common/hipsparselt_gentest.py -I ../include hipsparselt_gtest.yaml -o "${HIPSPARSELT_TEST_DATA}"
                     DEPENDS ../common/hipsparselt_gentest.py ../include/hipsparselt_common.yaml
                             spmm_common.yaml spmm_batched_common.yaml spmm_strided_batched_common.yaml
                             spmm_common_16.yaml spmm_batched_common_16.yaml spmm_strided_batched_common_16.yaml

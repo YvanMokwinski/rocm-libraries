@@ -24,6 +24,7 @@ import rocisa
 from copy import deepcopy
 import pickle
 import os
+import shutil
 
 isa = (9,0,10)
 
@@ -40,7 +41,12 @@ def getGfxName(isa):
 def test_rocisa():
     rocm_path = os.environ.get("ROCM_PATH", "/opt/rocm")
     global_isa = rocisa.rocIsa.getInstance()
-    global_isa.init(isa, rocm_path + "/bin/amdclang++", False)
+    search_path = os.pathsep.join([
+        os.path.join(rocm_path, "bin"),
+        os.path.join(rocm_path, "lib", "llvm", "bin"),
+    ])
+    assembler = shutil.which("amdclang++", path=search_path) or "amdclang++"
+    global_isa.init(isa, assembler, False)
     global_isa.setKernel(isa, 64)
 
     ki = global_isa.getKernel()
@@ -62,7 +68,7 @@ class Item2(rocisa.base.Item):
         base_state = super().__getstate__()
         py_state = {key: value for key, value in self.__dict__.items() if not key.startswith("__")}
         return (base_state, py_state)
-    
+
     def __setstate__(self, state):
         base_state, py_state = state
         super().__setstate__(base_state)
@@ -70,7 +76,7 @@ class Item2(rocisa.base.Item):
 
     def __deepcopy__(self, memo):
         assert 0, "Not implemented"
-        
+
     def print(self):
         for i in self.itemList:
             print(i)
@@ -111,8 +117,8 @@ def test_copy():
     print("This is a deepcopied function:", deepcopiedFunction(isa))
 
 def test_functions():
-    print("GLC:", rocisa.getGlcBitName(True))
-    print("SLC:", rocisa.getSlcBitName(False))
+    print("GLC:", rocisa.getGlcBitName())
+    print("SLC:", rocisa.getSlcBitName())
 
 test_rocisa()
 test_item()

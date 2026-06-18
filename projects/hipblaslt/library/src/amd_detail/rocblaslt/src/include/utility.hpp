@@ -3,7 +3,7 @@
  *
  * MIT License
  *
- * Copyright (C) 2022-2024 Advanced Micro Devices, Inc.
+ * Copyright (C) 2022-2026 Advanced Micro Devices, Inc.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -25,19 +25,22 @@
  *
  *******************************************************************************/
 
+// Why doesn't this header use a namespace?
+
 #pragma once
-#ifndef UTILITY_HPP
-#define UTILITY_HPP
+#ifndef ROCBLASLT_UTILITY_HPP
+#define ROCBLASLT_UTILITY_HPP
 
 #include "handle.h"
 #include "logging.h"
 #include <algorithm>
 #include <exception>
 #include <mutex>
+#include <csignal>
 
 #pragma STDC CX_LIMITED_RANGE ON
 
-static std::mutex log_mutex;
+inline std::mutex log_mutex;
 
 inline bool isAligned(const void* pointer, size_t byte_count)
 {
@@ -86,23 +89,23 @@ constexpr const char* rocblaslt_compute_type_string(rocblaslt_compute_type type)
 }
 
 template <typename>
-static constexpr char rocblaslt_precision_string[] = "invalid";
+constexpr inline char rocblaslt_precision_string[] = "invalid";
 template <>
-static constexpr char rocblaslt_precision_string<rocblaslt_bfloat16>[] = "bf16_r";
+constexpr inline char rocblaslt_precision_string<rocblaslt_bfloat16>[] = "bf16_r";
 template <>
-static constexpr char rocblaslt_precision_string<rocblaslt_half>[] = "f16_r";
+constexpr inline char rocblaslt_precision_string<rocblaslt_half>[] = "f16_r";
 template <>
-static constexpr char rocblaslt_precision_string<float>[] = "f32_r";
+constexpr inline char rocblaslt_precision_string<float>[] = "f32_r";
 template <>
-static constexpr char rocblaslt_precision_string<double>[] = "f64_r";
+constexpr inline char rocblaslt_precision_string<double>[] = "f64_r";
 template <>
-static constexpr char rocblaslt_precision_string<int8_t>[] = "i8_r";
+constexpr inline char rocblaslt_precision_string<int8_t>[] = "i8_r";
 template <>
-static constexpr char rocblaslt_precision_string<uint8_t>[] = "u8_r";
+constexpr inline char rocblaslt_precision_string<uint8_t>[] = "u8_r";
 template <>
-static constexpr char rocblaslt_precision_string<int32_t>[] = "i32_r";
+constexpr inline char rocblaslt_precision_string<int32_t>[] = "i32_r";
 template <>
-static constexpr char rocblaslt_precision_string<uint32_t>[] = "u32_r";
+constexpr inline char rocblaslt_precision_string<uint32_t>[] = "u32_r";
 
 std::string prefix(const char* layer, const char* caller);
 
@@ -117,6 +120,8 @@ const char* rocblaslt_matrix_layout_attributes_to_string(rocblaslt_matrix_layout
 const char* rocblaslt_matmul_desc_attributes_to_string(rocblaslt_matmul_desc_attributes type);
 
 const char* hipblasOperation_to_string(hipblasOperation_t op);
+
+const char* rocblaslt_scaling_format_to_string(RocblasltContractionProblem::ScalingFormat type);
 
 const char* rocblaslt_layer_mode2string(rocblaslt_layer_mode layer_mode);
 
@@ -253,7 +258,14 @@ void log_profile(const char* func, Ts&&... xs)
     static argument_profile<decltype(tup)> profile(get_logger_os());
 
     // Add at_quick_exit handler in case the program exits early
-    static int aqe = at_quick_exit([] { profile.~argument_profile(); });
+    static int aqe = at_quick_exit([] { profile.dump(); });
+
+    // Register signal handlers to flush profile on early termination
+    // Works on both Windows and Linux
+    static int sig = [] {
+        signal(SIGTERM, [](int) { profile.dump(); ::_exit(0); });
+        return 0;
+    }();
 
     // Profile the tuple
     profile(std::move(tup));
@@ -320,6 +332,8 @@ inline bool is_grad_enabled(rocblaslt_epilogue value_)
     case ROCBLASLT_EPILOGUE_DGELU_BGRAD:
     case ROCBLASLT_EPILOGUE_BGRADA:
     case ROCBLASLT_EPILOGUE_BGRADB:
+    case ROCBLASLT_EPILOGUE_DRELU:
+    case ROCBLASLT_EPILOGUE_DRELU_BGRAD:
         return true;
     default:
         return false;
@@ -330,10 +344,19 @@ inline bool is_e_enabled(rocblaslt_epilogue value_)
 {
     switch(value_)
     {
-    case ROCBLASLT_EPILOGUE_DGELU:
-    case ROCBLASLT_EPILOGUE_DGELU_BGRAD:
+    // forward pass:
+    case ROCBLASLT_EPILOGUE_RELU_AUX:
+    case ROCBLASLT_EPILOGUE_RELU_AUX_BIAS:
     case ROCBLASLT_EPILOGUE_GELU_AUX:
     case ROCBLASLT_EPILOGUE_GELU_AUX_BIAS:
+    case ROCBLASLT_EPILOGUE_CLAMP_AUX_EXT:
+    case ROCBLASLT_EPILOGUE_CLAMP_AUX_BIAS_EXT:
+    case ROCBLASLT_EPILOGUE_SIGMOID:
+    // backward pass:
+    case ROCBLASLT_EPILOGUE_DGELU:
+    case ROCBLASLT_EPILOGUE_DGELU_BGRAD:
+    case ROCBLASLT_EPILOGUE_DRELU:
+    case ROCBLASLT_EPILOGUE_DRELU_BGRAD:
         return true;
     default:
         return false;
@@ -347,12 +370,15 @@ inline bool is_bias_enabled(rocblaslt_epilogue value_)
     case ROCBLASLT_EPILOGUE_BIAS:
     case ROCBLASLT_EPILOGUE_GELU_BIAS:
     case ROCBLASLT_EPILOGUE_RELU_BIAS:
+    case ROCBLASLT_EPILOGUE_RELU_AUX_BIAS:
     case ROCBLASLT_EPILOGUE_GELU_AUX_BIAS:
     case ROCBLASLT_EPILOGUE_DGELU_BGRAD:
     case ROCBLASLT_EPILOGUE_BGRADA:
     case ROCBLASLT_EPILOGUE_BGRADB:
+    case ROCBLASLT_EPILOGUE_DRELU_BGRAD:
     case ROCBLASLT_EPILOGUE_SWISH_BIAS_EXT:
     case ROCBLASLT_EPILOGUE_CLAMP_BIAS_EXT:
+    case ROCBLASLT_EPILOGUE_CLAMP_AUX_BIAS_EXT:
         return true;
     default:
         return false;
@@ -365,16 +391,22 @@ inline bool is_act_enabled(rocblaslt_epilogue value_)
     {
     case ROCBLASLT_EPILOGUE_RELU:
     case ROCBLASLT_EPILOGUE_RELU_BIAS:
+    case ROCBLASLT_EPILOGUE_RELU_AUX:
+    case ROCBLASLT_EPILOGUE_RELU_AUX_BIAS:
     case ROCBLASLT_EPILOGUE_GELU:
     case ROCBLASLT_EPILOGUE_GELU_BIAS:
     case ROCBLASLT_EPILOGUE_GELU_AUX:
     case ROCBLASLT_EPILOGUE_GELU_AUX_BIAS:
     case ROCBLASLT_EPILOGUE_DGELU:
     case ROCBLASLT_EPILOGUE_DGELU_BGRAD:
+    case ROCBLASLT_EPILOGUE_DRELU:
+    case ROCBLASLT_EPILOGUE_DRELU_BGRAD:
     case ROCBLASLT_EPILOGUE_SWISH_EXT:
     case ROCBLASLT_EPILOGUE_SWISH_BIAS_EXT:
     case ROCBLASLT_EPILOGUE_CLAMP_EXT:
     case ROCBLASLT_EPILOGUE_CLAMP_BIAS_EXT:
+    case ROCBLASLT_EPILOGUE_CLAMP_AUX_EXT:
+    case ROCBLASLT_EPILOGUE_CLAMP_AUX_BIAS_EXT:
         return true;
     case ROCBLASLT_EPILOGUE_DEFAULT:
     case ROCBLASLT_EPILOGUE_BIAS:
@@ -382,6 +414,70 @@ inline bool is_act_enabled(rocblaslt_epilogue value_)
         return false;
     }
 };
+
+inline bool isBlockScaling(RocblasltContractionProblem::ScalingFormat s)
+{
+    switch(s)
+    {
+    case RocblasltContractionProblem::ScalingFormat::Block_32_UE8M0:
+    case RocblasltContractionProblem::ScalingFormat::Block_32_UE8M0_32_8_EXT:
+        return true;
+    default:
+        return false;
+    }
+}
+
+inline size_t blockSize(RocblasltContractionProblem::ScalingFormat s)
+{
+    switch(s)
+    {
+    case RocblasltContractionProblem::ScalingFormat::Block_32_UE8M0:
+    case RocblasltContractionProblem::ScalingFormat::Block_32_UE8M0_32_8_EXT:
+        return 32;
+    default:
+        return 1;
+    }
+}
+
+inline std::vector<size_t> preSwizzleSizeForScale(RocblasltContractionProblem::ScalingFormat s)
+{
+    // Returns preSwizzleTile for scale format
+    // When preSwizzleTile is set:
+    // - MI instruction is forced to 16x16x128
+    // - swizzleScale must be enabled
+    switch(s)
+    {
+    case RocblasltContractionProblem::ScalingFormat::Block_32_UE8M0_32_8_EXT:
+        // MI instruction is forced to 16x16x128, so the third element is 4 (i.e., 128/scaleBlockSize)
+        return {32, 8, 4};
+    default:
+        return {};
+    }
+}
+
+inline std::vector<size_t> preTileSizeForScaleA(RocblasltContractionProblem::ScalingFormat s)
+{
+    // Returns preTile for scale A: {tileM, tileK}
+    switch(s)
+    {
+    case RocblasltContractionProblem::ScalingFormat::Block_32_UE8M0_32_8_EXT:
+        return {32, 8};
+    default:
+        return {};
+    }
+}
+
+inline std::vector<size_t> preTileSizeForScaleB(RocblasltContractionProblem::ScalingFormat s)
+{
+    // Returns preTile for scale B: {tileK, tileN}
+    switch(s)
+    {
+    case RocblasltContractionProblem::ScalingFormat::Block_32_UE8M0_32_8_EXT:
+        return {8, 32};
+    default:
+        return {};
+    }
+}
 
 template <typename T>
 struct floating_traits
@@ -469,4 +565,4 @@ struct hipblasltClientPerformanceArgs
     static size_t memReadBytes;
 };
 
-#endif // UTILITY_H
+#endif // ROCBLASLT_UTILITY_HPP

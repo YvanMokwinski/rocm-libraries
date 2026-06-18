@@ -31,30 +31,34 @@ extern "C" {
 #if(!defined(CUDART_VERSION) || CUDART_VERSION < 13000)
 /*! \ingroup precond_module
 *  \details
-*  \p hipsparseXcsric02_zeroPivot returns \ref HIPSPARSE_STATUS_ZERO_PIVOT, if either a
-*  structural or numerical zero has been found during \ref hipsparseScsric02_analysis 
-*  "hipsparseXcsric02_analysis()" or \ref hipsparseScsric02 "hipsparseXcsric02()" 
-*  computation. The first zero pivot \f$j\f$ at \f$A_{j,j}\f$ is stored in \p position, 
-*  using same index base as the CSR matrix.
+*  \p hipsparseXcsric02_zeroPivot returns \ref HIPSPARSE_STATUS_ZERO_PIVOT if either a
+*  structural or numerical zero has been found during \ref hipsparseScsric02_analysis
+*  "hipsparseXcsric02_analysis()" or \ref hipsparseScsric02 "hipsparseXcsric02()"
+*  computation. The first zero pivot \f$j\f$ at \f$A_{j,j}\f$ is stored in \p position,
+*  using the same index base as the CSR matrix.
 *
 *  \p position can be in host or device memory. If no zero pivot has been found,
 *  \p position is set to -1 and \ref HIPSPARSE_STATUS_SUCCESS is returned instead.
 *
-*  \note \p hipsparseXcsric02_zeroPivot is a blocking function. It might influence
-*  performance negatively.
+*  \note \p hipsparseXcsric02_zeroPivot is a blocking function. It might negatively influence
+*  performance.
+*
+*  \deprecated
+*  This function is deprecated when using the CUDA backend (CUDA 12.0+) and will be 
+*  removed in CUDA 13.0. This deprecation does not apply to the ROCm backend.
 *
 *  @param[in]
-*  handle      handle to the hipsparse library context queue.
+*  handle      handle to the hipSPARSE library context queue.
 *  @param[in]
 *  info        structure that holds the information collected during the analysis step.
 *  @param[inout]
-*  position    pointer to zero pivot \f$j\f$, can be in host or device memory.
+*  position    pointer to zero pivot \f$j\f$, which can be in host or device memory.
 *
-*  \retval     HIPSPARSE_STATUS_SUCCESS the operation completed successfully.
-*  \retval     HIPSPARSE_STATUS_INVALID_VALUE \p handle, \p info or \p position pointer is
-*              invalid.
-*  \retval     HIPSPARSE_STATUS_INTERNAL_ERROR an internal error occurred.
-*  \retval     HIPSPARSE_STATUS_ZERO_PIVOT zero pivot has been found.
+*  \retval HIPSPARSE_STATUS_SUCCESS the operation completed successfully.
+*  \retval HIPSPARSE_STATUS_NOT_INITIALIZED \p handle is not initialized.
+*  \retval HIPSPARSE_STATUS_INVALID_VALUE \p handle, \p info, or \p position is nullptr.
+*  \retval HIPSPARSE_STATUS_INTERNAL_ERROR an internal error occurred.
+*  \retval HIPSPARSE_STATUS_ZERO_PIVOT zero pivot has been found.
 */
 DEPRECATED_CUDA_12000("The routine will be removed in CUDA 13")
 HIPSPARSE_EXPORT
@@ -66,12 +70,12 @@ hipsparseStatus_t
 /*! \ingroup precond_module
 *  \details
 *  \p hipsparseXcsric02_bufferSize returns the size of the temporary storage buffer in bytes
-*  that is required by \ref hipsparseScsric02_analysis "hipsparseXcsric02_analysis()" and 
-*  \ref hipsparseScsric02 "hipsparseXcsric02()". The temporary storage buffer must be allocated 
+*  that is required by \ref hipsparseScsric02_analysis "hipsparseXcsric02_analysis()" and
+*  \ref hipsparseScsric02 "hipsparseXcsric02()". The temporary storage buffer must be allocated
 *  by the user.
 *
 *  @param[in]
-*  handle             handle to the hipsparse library context queue.
+*  handle             handle to the hipSPARSE library context queue.
 *  @param[in]
 *  m                  number of rows of the sparse CSR matrix.
 *  @param[in]
@@ -94,8 +98,8 @@ hipsparseStatus_t
 *                     \ref hipsparseScsric02 "hipsparseXcsric02()".
 *
 *  \retval     HIPSPARSE_STATUS_SUCCESS the operation completed successfully.
-*  \retval     HIPSPARSE_STATUS_INVALID_VALUE \p handle, \p m, \p nnz, \p descrA, \p csrSortedValA, 
-*              \p csrSortedRowPtrA, \p csrSortedColIndA, \p info or \p pBufferSizeInBytes pointer is 
+*  \retval     HIPSPARSE_STATUS_INVALID_VALUE \p handle, \p m, \p nnz, \p descrA, \p csrSortedValA,
+*              \p csrSortedRowPtrA, \p csrSortedColIndA, \p info, or \p pBufferSizeInBytes pointer is
 *              invalid.
 *  \retval     HIPSPARSE_STATUS_INTERNAL_ERROR an internal error occurred.
 *  \retval     HIPSPARSE_STATUS_NOT_SUPPORTED
@@ -152,12 +156,12 @@ hipsparseStatus_t hipsparseZcsric02_bufferSize(hipsparseHandle_t         handle,
 /*! \ingroup precond_module
 *  \details
 *  \p hipsparseXcsric02_bufferSizeExt returns the size of the temporary storage buffer
-*  in bytes that is required by \ref hipsparseScsric02_analysis "hipsparseXcsric02_analysis()" 
-*  and \ref hipsparseScsric02 "hipsparseXcsric02()". The temporary storage buffer must be 
+*  in bytes that is required by \ref hipsparseScsric02_analysis "hipsparseXcsric02_analysis()"
+*  and \ref hipsparseScsric02 "hipsparseXcsric02()". The temporary storage buffer must be
 *  allocated by the user.
 *
 *  @param[in]
-*  handle             handle to the hipsparse library context queue.
+*  handle             handle to the hipSPARSE library context queue.
 *  @param[in]
 *  m                  number of rows of the sparse CSR matrix.
 *  @param[in]
@@ -180,8 +184,8 @@ hipsparseStatus_t hipsparseZcsric02_bufferSize(hipsparseHandle_t         handle,
 *                     \ref hipsparseScsric02 "hipsparseXcsric02()".
 *
 *  \retval     HIPSPARSE_STATUS_SUCCESS the operation completed successfully.
-*  \retval     HIPSPARSE_STATUS_INVALID_VALUE \p handle, \p m, \p nnz, \p descrA, \p csrSortedValA, 
-*              \p csrSortedRowPtrA, \p csrSortedColIndA, \p info or \p pBufferSizeInBytes pointer is 
+*  \retval     HIPSPARSE_STATUS_INVALID_VALUE \p handle, \p m, \p nnz, \p descrA, \p csrSortedValA,
+*              \p csrSortedRowPtrA, \p csrSortedColIndA, \p info, or \p pBufferSizeInBytes pointer is
 *              invalid.
 *  \retval     HIPSPARSE_STATUS_INTERNAL_ERROR an internal error occurred.
 *  \retval     HIPSPARSE_STATUS_NOT_SUPPORTED
@@ -233,18 +237,18 @@ hipsparseStatus_t hipsparseZcsric02_bufferSizeExt(hipsparseHandle_t         hand
 #if(!defined(CUDART_VERSION) || CUDART_VERSION < 13000)
 /*! \ingroup precond_module
 *  \details
-*  \p hipsparseXcsric02_analysis performs the analysis step for \ref hipsparseScsric02 
+*  \p hipsparseXcsric02_analysis performs the analysis step for \ref hipsparseScsric02
 *  "hipsparseXcsric02()".
 *
 *  \note
 *  If the matrix sparsity pattern changes, the gathered information will become invalid.
 *
 *  \note
-*  This function is non blocking and executed asynchronously with respect to the host.
-*  It may return before the actual computation has finished.
+*  This function is non-blocking and executed asynchronously with respect to the host.
+*  It can return before the actual computation has finished.
 *
 *  @param[in]
-*  handle           handle to the hipsparse library context queue.
+*  handle           handle to the hipSPARSE library context queue.
 *  @param[in]
 *  m                number of rows of the sparse CSR matrix.
 *  @param[in]
@@ -268,8 +272,8 @@ hipsparseStatus_t hipsparseZcsric02_bufferSizeExt(hipsparseHandle_t         hand
 *  pBuffer          temporary storage buffer allocated by the user.
 *
 *  \retval     HIPSPARSE_STATUS_SUCCESS the operation completed successfully.
-*  \retval     HIPSPARSE_STATUS_INVALID_VALUE \p handle, \p m, \p nnz, \p descrA, \p csrSortedValA, 
-*              \p csrSortedRowPtrA, \p csrSortedColIndA, \p info or \p pBuffer pointer is invalid.
+*  \retval     HIPSPARSE_STATUS_INVALID_VALUE \p handle, \p m, \p nnz, \p descrA, \p csrSortedValA,
+*              \p csrSortedRowPtrA, \p csrSortedColIndA, \p info, or \p pBuffer pointer is invalid.
 *  \retval     HIPSPARSE_STATUS_INTERNAL_ERROR an internal error occurred.
 *  \retval     HIPSPARSE_STATUS_NOT_SUPPORTED
 *              \ref hipsparseMatrixType_t != \ref HIPSPARSE_MATRIX_TYPE_GENERAL.
@@ -328,8 +332,8 @@ hipsparseStatus_t hipsparseZcsric02_analysis(hipsparseHandle_t         handle,
 
 #if(!defined(CUDART_VERSION) || CUDART_VERSION < 13000)
 /*! \ingroup precond_module
-*  \brief Incomplete Cholesky factorization with 0 fill-ins and no pivoting using CSR
-*  storage format
+*  \brief Incomplete Cholesky factorization with 0 fill-ins and no pivoting using the CSR
+*  storage format.
 *
 *  \details
 *  \p hipsparseXcsric02 computes the incomplete Cholesky factorization with 0 fill-ins
@@ -349,18 +353,18 @@ hipsparseStatus_t hipsparseZcsric02_analysis(hipsparseHandle_t         handle,
 *  for each entry found in the CSR matrix \f$A\f$.
 *
 *  Computing the above incomplete Cholesky factorization requires three steps to complete. First,
-*  the user determines the size of the required temporary storage buffer by calling 
-*  \ref hipsparseScsric02_bufferSize "hipsparseXcsric02_bufferSize()". Once this buffer size has been determined, 
-*  the user allocates the buffer and passes it to \ref hipsparseScsric02_analysis "hipsparseXcsric02_analysis()". 
+*  the user determines the size of the required temporary storage buffer by calling
+*  \ref hipsparseScsric02_bufferSize "hipsparseXcsric02_bufferSize()". After this buffer size has been determined,
+*  the user allocates the buffer and passes it to \ref hipsparseScsric02_analysis "hipsparseXcsric02_analysis()".
 *  This will perform analysis on the sparsity pattern of the matrix. Finally, the user calls \p hipsparseScsric02,
 *  \p hipsparseDcsric02, \p hipsparseCcsric02, or \p hipsparseZcsric02 to perform the actual factorization. The calculation
-*  of the buffer size and the analysis of the sparse matrix only need to be performed once for a given sparsity pattern
-*  while the factorization can be repeatedly applied to multiple matrices having the same sparsity pattern. Once all calls
+*  of the buffer size and the analysis of the sparse matrix only need to be performed once for a given sparsity pattern,
+*  while the factorization can be repeatedly applied to multiple matrices having the same sparsity pattern. After all calls
 *  to \ref hipsparseScsric02 "hipsparseXcsric02()" are complete, the temporary buffer can be deallocated.
 *
-*  When computing the Cholesky factorization, it is possible that \f$L_{jj} == 0\f$ which would result in a division by zero.
-*  This could occur from either \f$A_{jj}\f$ not existing in the sparse CSR matrix (referred to as a structural zero) or because 
-*  \f$A_{jj} - \sum_{k=0}^{j-1}(L_{jk})^{2} == 0\f$ (referred to as a numerical zero). For example, running the Cholesky 
+*  When computing the Cholesky factorization, it is possible that \f$L_{jj} == 0\f$, which would result in a division by zero.
+*  This could occur from either \f$A_{jj}\f$ not existing in the sparse CSR matrix (referred to as a structural zero) or because
+*  \f$A_{jj} - \sum_{k=0}^{j-1}(L_{jk})^{2} == 0\f$ (referred to as a numerical zero). For example, running the Cholesky
 *  factorization on the following matrix:
 *  \f[
 *    \begin{bmatrix}
@@ -386,8 +390,8 @@ hipsparseStatus_t hipsparseZcsric02_analysis(hipsparseHandle_t         handle,
 *               &= 0
 *    \end{array}
 *  \f]
-*  The user can detect the presence of a structural zero by calling \ref hipsparseXcsric02_zeroPivot() after 
-*  \ref hipsparseScsric02_analysis "hipsparseXcsric02_analysis()" and/or the presence of a structural or 
+*  The user can detect the presence of a structural zero by calling \ref hipsparseXcsric02_zeroPivot() after
+*  \ref hipsparseScsric02_analysis "hipsparseXcsric02_analysis()" and/or the presence of a structural or
 *  numerical zero by calling \ref hipsparseXcsric02_zeroPivot() after \ref hipsparseScsric02 "hipsparseXcsric02()":
 *  \code{.c}
 *  hipsparseDcsric02(handle,
@@ -407,11 +411,11 @@ hipsparseStatus_t hipsparseZcsric02_analysis(hipsparseHandle_t         handle,
 *      printf("L has structural and/or numerical zero at L(%d,%d)\n", position, position);
 *  }
 *  \endcode
-*  In both cases, \ref hipsparseXcsric02_zeroPivot() will report the first zero pivot (either numerical or structural) 
-*  found. See full example below. The user can also set the diagonal type to be \f$1\f$ using \ref hipsparseSetMatDiagType() 
-*  which will interpret the matrix \f$A\f$ as having ones on its diagonal (even if no nonzero exists in the sparsity pattern). 
+*  In both cases, \ref hipsparseXcsric02_zeroPivot() will report the first zero pivot (either numerical or structural)
+*  found. See the full example below. The user can also set the diagonal type to be \f$1\f$ using \ref hipsparseSetMatDiagType(),
+*  which will interpret the matrix \f$A\f$ as having ones on its diagonal (even if no non-zero exists in the sparsity pattern).
 *
-*  \p hipsparseXcsric02 computes the Cholesky factorization inplace meaning that the values array \p csrSortedValA_valM of the \f$A\f$ 
+*  \p hipsparseXcsric02 computes the Cholesky factorization inplace meaning that the values array \p csrSortedValA_valM of the \f$A\f$
 *  matrix is overwritten with the \f$L\f$ matrix stored in the lower triangular part of \f$A\f$:
 *
 *  \f[
@@ -429,22 +433,22 @@ hipsparseStatus_t hipsparseZcsric02_analysis(hipsparseHandle_t         handle,
 *    \end{bmatrix}
 *    \end{align}
 *  \f]
-*  The row pointer array \p csrSortedRowPtrA and the column indices array \p csrSortedColIndA remain the same for \f$A\f$ and the 
-*  output as the incomplete factorization does not generate new nonzeros in the output which do not already exist in \f$A\f$.
+*  The row pointer array \p csrSortedRowPtrA and the column indices array \p csrSortedColIndA remain the same for \f$A\f$ and the
+*  output as the incomplete factorization does not generate new non-zeros in the output which do not already exist in \f$A\f$.
 *
-*  The performance of computing Cholesky factorization with hipSPARSE greatly depends on the sparisty pattern
-*  the the matrix \f$A\f$ as this is what determines the amount of parallelism available.
+*  The performance of computing Cholesky factorization with hipSPARSE greatly depends on the sparsity pattern
+*  the the matrix \f$A\f$, because this is what determines the amount of parallelism available.
 *
 *  \note
 *  The sparse CSR matrix has to be sorted. This can be achieved by calling
 *  \ref hipsparseXcsrsort().
 *
 *  \note
-*  This function is non blocking and executed asynchronously with respect to the host.
-*  It may return before the actual computation has finished.
+*  This function is non-blocking and executed asynchronously with respect to the host.
+*  It can return before the actual computation has finished.
 *
 *  @param[in]
-*  handle             handle to the hipsparse library context queue.
+*  handle             handle to the hipSPARSE library context queue.
 *  @param[in]
 *  m                  number of rows of the sparse CSR matrix.
 *  @param[in]
@@ -467,8 +471,8 @@ hipsparseStatus_t hipsparseZcsric02_analysis(hipsparseHandle_t         handle,
 *  pBuffer            temporary storage buffer allocated by the user.
 *
 *  \retval     HIPSPARSE_STATUS_SUCCESS the operation completed successfully.
-*  \retval     HIPSPARSE_STATUS_INVALID_VALUE \p handle, \p m, \p nnz, \p descrA, \p csrSortedValA_valM, 
-*              \p csrSortedRowPtrA or \p csrSortedColIndA pointer is invalid.
+*  \retval     HIPSPARSE_STATUS_INVALID_VALUE \p handle, \p m, \p nnz, \p descrA, \p csrSortedValA_valM,
+*              \p csrSortedRowPtrA, or \p csrSortedColIndA pointer is invalid.
 *  \retval     HIPSPARSE_STATUS_ARCH_MISMATCH the device is not supported.
 *  \retval     HIPSPARSE_STATUS_INTERNAL_ERROR an internal error occurred.
 *  \retval     HIPSPARSE_STATUS_NOT_SUPPORTED

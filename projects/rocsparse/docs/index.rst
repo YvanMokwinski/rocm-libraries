@@ -8,18 +8,6 @@
 rocSPARSE documentation
 ********************************************************************
 
-.. important::
-   **hipSPARSE is the recommended library for development**
-   
-   For new development projects, **hipSPARSE** is recommended instead of rocSPARSE. 
-   hipSPARSE provides a comprehensive, portable interface that supports multiple backends 
-   (including rocSPARSE and cuSPARSE) and is the preferred library for sparse matrix operations.
-   
-   For documentation and examples, see the `hipSPARSE documentation <https://rocm.docs.amd.com/projects/hipSPARSE/en/latest/>`_.
-   
-   The rocSPARSE documentation is maintained for reference purposes and to document any 
-   specialized functionality that might not be available in hipSPARSE.
-
 rocSPARSE is a library that provides basic linear algebra subroutines for sparse matrices and vectors.
 It's created using the HIP programming language, implemented on top of the ROCm runtime and toolchains,
 and optimized for AMD discrete GPUs.
@@ -28,7 +16,12 @@ The rocSPARSE public repository is located at `<https://github.com/ROCm/rocm-lib
 
 .. note::
 
-   The rocSPARSE repository for ROCm 6.4.2 and earlier is located at `<https://github.com/ROCm/rocSPARSE>`_.
+   The rocSPARSE repository for ROCm 6.4.3 and earlier is located at `<https://github.com/ROCm/rocSPARSE>`_.
+
+.. note::
+   For portability, ROCm provides the `hipSPARSE <https://github.com/ROCm/rocm-libraries/tree/develop/projects/hipsparse>`_ library.
+   hipSPARSE includes a comprehensive, portable interface that supports multiple backends (including rocSPARSE and cuSPARSE).
+   For documentation and examples, see the `hipSPARSE documentation <https://rocm.docs.amd.com/projects/hipSPARSE/en/latest/>`_.
 
 For ROCm code examples, see `<https://github.com/ROCm/rocm-examples>`_.
 
@@ -37,8 +30,9 @@ For ROCm code examples, see `<https://github.com/ROCm/rocm-examples>`_.
 
   .. grid-item-card:: Install
 
-    * :doc:`Linux installation guide <./install/Linux_Install_Guide>`
-    * :doc:`Windows installation guide <./install/Windows_Install_Guide>`
+    * :doc:`Install rocSPARSE <./install/install>`
+    * :doc:`Build from source on Linux <./install/Linux_Install_Guide>`
+    * :doc:`Build from source on Windows <./install/Windows_Install_Guide>`
 
 .. grid:: 2
   :gutter: 3
@@ -46,11 +40,11 @@ For ROCm code examples, see `<https://github.com/ROCm/rocm-examples>`_.
   .. grid-item-card:: Conceptual
 
     * :doc:`rocSPARSE design <./conceptual/rocsparse-design>`
+    * :doc:`Storage formats <./conceptual/storage-formats-sparse>`
 
   .. grid-item-card:: How to
 
     * :doc:`Use rocSPARSE <./how-to/using-rocsparse>`
-    * :doc:`Contribute to rocSPARSE <./how-to/contribute>`
 
   .. grid-item-card:: Examples
 
@@ -78,5 +72,6 @@ For ROCm code examples, see `<https://github.com/ROCm/rocm-examples>`_.
     * :ref:`reproducibility`
 
 To contribute to the documentation, see `Contributing to ROCm <https://rocm.docs.amd.com/en/latest/contribute/contributing.html>`_.
+For information on contributing to the rocSPARSE code base, see :doc:`Contribute to rocSPARSE <./contribute>`.
 
 You can find licensing information on the `Licensing <https://rocm.docs.amd.com/en/latest/about/license.html>`_ page.

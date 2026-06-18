@@ -50,18 +50,14 @@ configure_file(
     @ONLY
 )
 
-if(BUILD_FILE_REORG_BACKWARD_COMPATIBILITY AND NOT WIN32)
-    rocm_wrap_header_file(
-        rocrand_version.h
-        GUARDS SYMLINK WRAPPER
-        WRAPPER_LOCATIONS include rocrand/include
-        OUTPUT_LOCATIONS library/include library/rocrand/include
-        HEADER_LOCATION include/rocrand
-    )
-endif()
-
 add_library(rocrand ${rocRAND_HIP_SRCS})
-add_library(roc::rocrand ALIAS rocrand)
+
+if(WIN32)
+    configure_file("${PROJECT_SOURCE_DIR}/library/include/rocrand/rocrand_in.rc.in"
+                   "${PROJECT_BINARY_DIR}/library/include/rocrand/rocrand_in.rc"
+                   @ONLY)
+    target_sources(rocrand PRIVATE "${PROJECT_BINARY_DIR}/library/include/rocrand/rocrand_in.rc")
+endif()
 
 set(SOBOL_PRECOMPUTED_SOURCES
     "src/rocrand_scrambled_sobol32_precomputed"
@@ -156,13 +152,6 @@ else()
     )
 endif()
 
-if(BUILD_FILE_REORG_BACKWARD_COMPATIBILITY AND NOT WIN32)
-    rocm_install(
-        DIRECTORY "${PROJECT_BINARY_DIR}/library/rocrand"
-        DESTINATION "."
-    )
-endif()
-
 # install library to C:\hipSDK\bin
 if (WIN32)
     install (TARGETS rocrand DESTINATION "${CMAKE_INSTALL_PREFIX}/bin")
@@ -173,6 +162,7 @@ if (WIN32)
 		    COMMAND ${CMAKE_COMMAND} -E copy
 			    $<TARGET_FILE:rocrand>
 			    ${PROJECT_BINARY_DIR}/test/$<TARGET_FILE_NAME:rocrand>
+			COMMENT "Copy test files"
 	    )
     endif()
     if (BUILD_BENCHMARK)
@@ -182,6 +172,7 @@ if (WIN32)
 		    COMMAND ${CMAKE_COMMAND} -E copy
 			    $<TARGET_FILE:rocrand>
 			    ${PROJECT_BINARY_DIR}/benchmark/$<TARGET_FILE_NAME:rocrand>
+			COMMENT "Copy benchmark files"
 	    )
     endif()
 endif()

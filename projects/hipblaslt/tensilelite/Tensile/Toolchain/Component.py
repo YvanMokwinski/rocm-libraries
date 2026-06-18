@@ -169,6 +169,9 @@ class Assembler(Component):
             destPath: The destination path for the generated object file.
         """
         args = self._default_args
+        # Enable true16 syntax on targets that support +real-true16.
+        if targetGfx in ("gfx1250", "gfx1201", "gfx1200", "gfx1100"):
+            args = args + ["-Xclangas", "-target-feature", "-Xclangas", "+real-true16"]
         args = [
             *args,
             f"-mcpu={targetGfx}",
@@ -224,6 +227,11 @@ class Compiler(Component):
             self.default_args.append("--save-temps")
         if os_name == "nt":                                                    # should we use fPIIC on all arches?
             self.default_args.extend(["-fms-extensions", "-fms-compatibility", "-fPIC", "-Wno-deprecated-declarations"])
+            # amdclang++ on Windows does not read ROCM_PATH from the environment;
+            # it requires --rocm-path on the command line to locate HIP headers.
+            rocm_path = environ.get("ROCM_PATH", "")
+            if rocm_path:
+                self.default_args.append(f"--rocm-path={rocm_path}")
 
 
     def __call__(self, include_path: str, target_list: List[str], srcPath: str, destPath: str):
@@ -351,7 +359,7 @@ class Linker(Component):
         """
         Create a response file and return the arguments to pass to the linker.
 
-        Since it is possible for the character limit of the operating system to be exceeded 
+        Since it is possible for the character limit of the operating system to be exceeded
         when invoking the linker, LLVM allows the provision of arguments via a "response file"
         Reference: https://llvm.org/docs/CommandLine.html#response-files
         """

@@ -1,5 +1,5 @@
+// Copyright (c) Advanced Micro Devices, Inc., or its affiliates.
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2025, Advanced Micro Devices, Inc. All rights reserved.
 
 #pragma once
 
@@ -15,6 +15,10 @@
 #include "ck_tile/ops/gemm/kernel/universal_gemm_kernel.hpp"
 #include "ck_tile/core/utility/type_traits.hpp"
 
+#if __clang_major__ >= 23
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wlifetime-safety-intra-tu-suggestions"
+#endif
 namespace ck_tile {
 
 /// @brief The MultiD GEMM kernel host arguments.
@@ -86,6 +90,7 @@ struct GemmKernelMultiD
     /// functions.
     using UniversalGemmKernel =
         UniversalGemmKernel<TilePartitioner_, GemmPipeline_, EpiloguePipeline_>;
+    static constexpr index_t kBlockSize = UniversalGemmKernel::kBlockSize;
 
     using TilePartitioner  = remove_cvref_t<TilePartitioner_>;
     using GemmPipeline     = remove_cvref_t<GemmPipeline_>;
@@ -94,7 +99,7 @@ struct GemmKernelMultiD
     /// @brief  Specify the layout configurations for A, B, E and D
     using ALayout  = remove_cvref_t<typename GemmPipeline::ALayout>;
     using BLayout  = remove_cvref_t<typename GemmPipeline::BLayout>;
-    using ELayout  = remove_cvref_t<typename GemmPipeline::CLayout>;
+    using CLayout  = remove_cvref_t<typename GemmPipeline::CLayout>;
     using DsLayout = remove_cvref_t<typename EpiloguePipeline::DsLayout>;
 
     /// @brief  Specify the data type configurations for A, B, E and D
@@ -113,10 +118,10 @@ struct GemmKernelMultiD
                       !is_detected<is_tuple, BDataType>::value,
                   "BLayout and BDataType must be scalars.");
 
-    /// @brief  ELayout and EDataType are expected to be scalars, not a tuple.
-    static_assert(!is_detected<is_tuple, ELayout>::value &&
+    /// @brief  CLayout and EDataType are expected to be scalars, not a tuple.
+    static_assert(!is_detected<is_tuple, CLayout>::value &&
                       !is_detected<is_tuple, EDataType>::value,
-                  "ELayout and EDataType must be scalars.");
+                  "CLayout and EDataType must be scalars.");
 
     /// @brief  DsLayout and DsDataType are expected to be tuple, not a scalar.
     static_assert(is_detected<is_tuple, DsLayout>::value &&
@@ -174,6 +179,12 @@ struct GemmKernelMultiD
     CK_TILE_HOST static auto
     IsSupportedArgument(const typename UniversalGemmKernel::KernelArgs& kargs) -> bool
     {
+        // Currently MultiD kernel doesn't support k_batch > 1
+        if(kargs.k_batch > 1)
+        {
+            return false;
+        }
+
         return UniversalGemmKernel::IsSupportedArgument(kargs);
     }
 
@@ -183,3 +194,7 @@ struct GemmKernelMultiD
     }
 };
 } // namespace ck_tile
+
+#if __clang_major__ >= 23
+#pragma clang diagnostic pop
+#endif

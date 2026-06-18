@@ -1,7 +1,8 @@
 TestParameters:
-    marks: [skip-gfx900, skip-gfx906, skip-gfx908, skip-gfx90a, skip-gfx940, skip-gfx941, skip-gfx942, skip-gfx1010, skip-gfx1011, skip-gfx1012, skip-gfx1030, skip-gfx1100, skip-gfx1101, skip-gfx1102, skip-gfx1200, skip-gfx1201] # not supported by arch
+    marks: [skip-gfx900, skip-gfx906, skip-gfx908, skip-gfx90a, skip-gfx940, skip-gfx941, skip-gfx942, skip-gfx1010, skip-gfx1011, skip-gfx1012, skip-gfx1030, skip-gfx1100, skip-gfx1101, skip-gfx1102, skip-gfx1200, skip-gfx1201, skip-gfx1250] # not supported by arch
 
 GlobalParameters:
+  SyncsPerBenchmark: 0
   MinimumRequiredVersion: 5.0.0
   SleepPercent: 50
   NumElementsToValidate: 128
@@ -29,8 +30,8 @@ BenchmarkProblems:
       DestDataType: b
       ComputeDataType: s
       HighPrecisionAccumulate: True
-      TransposeA: 0
-      TransposeB: 0
+      TransposeA: False
+      TransposeB: False
       UseBeta: True
       UseBias: 0
       Batched: True
@@ -40,16 +41,18 @@ BenchmarkProblems:
       InitialSolutionParameters:
       BenchmarkCommonParameters:
         - KernelLanguage: ["Assembly"]
-
       ForkParameters:
         #        - AssertSummationElementMultiple: [32]
         - MatrixInstruction:
-          - [16, 16, 32, 1, 1, 4, 4, 2, 2 ]  
-          - [16, 16, 32, 1, 1, 2, 8, 4, 1 ]  
-          - [16, 16, 32, 1, 1, 8, 2, 1, 4 ]  
-          - [32, 32, 16, 1, 1, 2, 2, 2, 2 ]  
-          - [32, 32, 16, 1, 1, 4, 1, 1, 4 ]  
-          - [32, 32, 16, 1, 1, 1, 4, 4, 1 ]  
+          - [16, 16, 32, 1, 1, 4, 4, 2, 2 ]
+          - [16, 16, 32, 1, 1, 2, 8, 4, 1 ]
+          - [16, 16, 32, 1, 1, 8, 2, 1, 4 ]
+          - [32, 32, 16, 1, 1, 2, 2, 2, 2 ]
+          - [32, 32, 16, 1, 1, 4, 1, 1, 4 ]
+          - [32, 32, 16, 1, 1, 1, 4, 4, 1 ]
+        # EPS + LDSTrInst not currently supported
+        # Adding EPS to this test case to ensure it is either rejected or fixed
+        - ExpandPointerSwap: [True, False]
         - PrefetchGlobalRead: [2]
         - PrefetchLocalRead: [1]
           #        - ClusterLocalRead: [1]
@@ -92,8 +95,8 @@ BenchmarkProblems:
       DestDataType: b
       ComputeDataType: s
       HighPrecisionAccumulate: True
-      TransposeA: 0
-      TransposeB: 0
+      TransposeA: False
+      TransposeB: False
       UseBeta: True
       UseBias: 0
       Batched: True
@@ -103,16 +106,15 @@ BenchmarkProblems:
       InitialSolutionParameters:
       BenchmarkCommonParameters:
         - KernelLanguage: ["Assembly"]
-
       ForkParameters:
         #        - AssertSummationElementMultiple: [32]
         - MatrixInstruction:
-          - [16, 16, 32, 1, 1, 4, 4, 2, 2 ]  
-          - [16, 16, 32, 1, 1, 2, 8, 4, 1 ]  
-          - [16, 16, 32, 1, 1, 8, 2, 1, 4 ]  
-          - [32, 32, 16, 1, 1, 2, 2, 2, 2 ]  
-          - [32, 32, 16, 1, 1, 4, 1, 1, 4 ]  
-          - [32, 32, 16, 1, 1, 1, 4, 4, 1 ]  
+          - [16, 16, 32, 1, 1, 4, 4, 2, 2 ]
+          - [16, 16, 32, 1, 1, 2, 8, 4, 1 ]
+          - [16, 16, 32, 1, 1, 8, 2, 1, 4 ]
+          - [32, 32, 16, 1, 1, 2, 2, 2, 2 ]
+          - [32, 32, 16, 1, 1, 4, 1, 1, 4 ]
+          - [32, 32, 16, 1, 1, 1, 4, 4, 1 ]
         - PrefetchGlobalRead: [2]
         - PrefetchLocalRead: [1]
           #        - ClusterLocalRead: [1]
@@ -155,8 +157,8 @@ BenchmarkProblems:
       DestDataType: h
       ComputeDataType: s
       HighPrecisionAccumulate: True
-      TransposeA: 0
-      TransposeB: 0
+      TransposeA: False
+      TransposeB: False
       UseBeta: True
       UseBias: 0
       Batched: True
@@ -166,16 +168,15 @@ BenchmarkProblems:
       InitialSolutionParameters:
       BenchmarkCommonParameters:
         - KernelLanguage: ["Assembly"]
-
       ForkParameters:
         #        - AssertSummationElementMultiple: [32]
         - MatrixInstruction:
-          - [16, 16, 32, 1, 1, 4, 4, 2, 2 ]  
-          - [16, 16, 32, 1, 1, 2, 8, 4, 1 ]  
-          - [16, 16, 32, 1, 1, 8, 2, 1, 4 ]  
-          - [32, 32, 16, 1, 1, 2, 2, 2, 2 ]  
-          - [32, 32, 16, 1, 1, 4, 1, 1, 4 ]  
-          - [32, 32, 16, 1, 1, 1, 4, 4, 1 ]  
+          - [16, 16, 32, 1, 1, 4, 4, 2, 2 ]
+          - [16, 16, 32, 1, 1, 2, 8, 4, 1 ]
+          - [16, 16, 32, 1, 1, 8, 2, 1, 4 ]
+          - [32, 32, 16, 1, 1, 2, 2, 2, 2 ]
+          - [32, 32, 16, 1, 1, 4, 1, 1, 4 ]
+          - [32, 32, 16, 1, 1, 1, 4, 4, 1 ]
         - PrefetchGlobalRead: [2]
         - PrefetchLocalRead: [1]
           #        - ClusterLocalRead: [1]
@@ -218,8 +219,8 @@ BenchmarkProblems:
       DestDataType: h
       ComputeDataType: s
       HighPrecisionAccumulate: True
-      TransposeA: 0
-      TransposeB: 0
+      TransposeA: False
+      TransposeB: False
       UseBeta: True
       UseBias: 0
       Batched: True
@@ -229,16 +230,15 @@ BenchmarkProblems:
       InitialSolutionParameters:
       BenchmarkCommonParameters:
         - KernelLanguage: ["Assembly"]
-
       ForkParameters:
         #        - AssertSummationElementMultiple: [32]
         - MatrixInstruction:
-          - [16, 16, 32, 1, 1, 4, 4, 2, 2 ]  
-          - [16, 16, 32, 1, 1, 2, 8, 4, 1 ]  
-          - [16, 16, 32, 1, 1, 8, 2, 1, 4 ]  
-          - [32, 32, 16, 1, 1, 2, 2, 2, 2 ]  
-          - [32, 32, 16, 1, 1, 4, 1, 1, 4 ]  
-          - [32, 32, 16, 1, 1, 1, 4, 4, 1 ]  
+          - [16, 16, 32, 1, 1, 4, 4, 2, 2 ]
+          - [16, 16, 32, 1, 1, 2, 8, 4, 1 ]
+          - [16, 16, 32, 1, 1, 8, 2, 1, 4 ]
+          - [32, 32, 16, 1, 1, 2, 2, 2, 2 ]
+          - [32, 32, 16, 1, 1, 4, 1, 1, 4 ]
+          - [32, 32, 16, 1, 1, 1, 4, 4, 1 ]
         - PrefetchGlobalRead: [2]
         - PrefetchLocalRead: [1]
           #        - ClusterLocalRead: [1]
@@ -281,8 +281,8 @@ BenchmarkProblems:
       DestDataType: b
       ComputeDataType: s
       HighPrecisionAccumulate: True
-      TransposeA: 0
-      TransposeB: 1
+      TransposeA: False
+      TransposeB: True
       UseBeta: True
       UseBias: 0
       Batched: True
@@ -292,17 +292,16 @@ BenchmarkProblems:
       InitialSolutionParameters:
       BenchmarkCommonParameters:
         - KernelLanguage: ["Assembly"]
-
       ForkParameters:
         #        - AssertSummationElementMultiple: [32]
         - MatrixInstruction:
-          #          - [16, 16, 16, 1, 1, 8, 8, 2, 2 ]  
-          - [16, 16, 32, 1, 1, 4, 4, 2, 2 ]  
-          - [16, 16, 32, 1, 1, 2, 8, 4, 1 ]  
-          - [16, 16, 32, 1, 1, 8, 2, 1, 4 ]  
-          - [32, 32, 16, 1, 1, 2, 2, 2, 2 ]  
-          - [32, 32, 16, 1, 1, 4, 1, 1, 4 ]  
-          - [32, 32, 16, 1, 1, 1, 4, 4, 1 ]  
+          #          - [16, 16, 16, 1, 1, 8, 8, 2, 2 ]
+          - [16, 16, 32, 1, 1, 4, 4, 2, 2 ]
+          - [16, 16, 32, 1, 1, 2, 8, 4, 1 ]
+          - [16, 16, 32, 1, 1, 8, 2, 1, 4 ]
+          - [32, 32, 16, 1, 1, 2, 2, 2, 2 ]
+          - [32, 32, 16, 1, 1, 4, 1, 1, 4 ]
+          - [32, 32, 16, 1, 1, 1, 4, 4, 1 ]
         - PrefetchGlobalRead: [2]
         - PrefetchLocalRead: [1]
           #        - ClusterLocalRead: [1]
@@ -346,8 +345,8 @@ BenchmarkProblems:
       DestDataType: b
       ComputeDataType: s
       HighPrecisionAccumulate: True
-      TransposeA: 0
-      TransposeB: 1
+      TransposeA: False
+      TransposeB: True
       UseBeta: True
       UseBias: 0
       Batched: True
@@ -357,17 +356,16 @@ BenchmarkProblems:
       InitialSolutionParameters:
       BenchmarkCommonParameters:
         - KernelLanguage: ["Assembly"]
-
       ForkParameters:
         #        - AssertSummationElementMultiple: [32]
         - MatrixInstruction:
-          #          - [16, 16, 16, 1, 1, 8, 8, 2, 2 ]  
-          - [16, 16, 32, 1, 1, 4, 4, 2, 2 ]  
-          - [16, 16, 32, 1, 1, 2, 8, 4, 1 ]  
-          - [16, 16, 32, 1, 1, 8, 2, 1, 4 ]  
-          - [32, 32, 16, 1, 1, 2, 2, 2, 2 ]  
-          - [32, 32, 16, 1, 1, 4, 1, 1, 4 ]  
-          - [32, 32, 16, 1, 1, 1, 4, 4, 1 ]  
+          #          - [16, 16, 16, 1, 1, 8, 8, 2, 2 ]
+          - [16, 16, 32, 1, 1, 4, 4, 2, 2 ]
+          - [16, 16, 32, 1, 1, 2, 8, 4, 1 ]
+          - [16, 16, 32, 1, 1, 8, 2, 1, 4 ]
+          - [32, 32, 16, 1, 1, 2, 2, 2, 2 ]
+          - [32, 32, 16, 1, 1, 4, 1, 1, 4 ]
+          - [32, 32, 16, 1, 1, 1, 4, 4, 1 ]
         - PrefetchGlobalRead: [2]
         - PrefetchLocalRead: [1]
           #        - ClusterLocalRead: [1]
@@ -411,8 +409,8 @@ BenchmarkProblems:
       DestDataType: h
       ComputeDataType: s
       HighPrecisionAccumulate: True
-      TransposeA: 0
-      TransposeB: 1
+      TransposeA: False
+      TransposeB: True
       UseBeta: True
       UseBias: 0
       Batched: True
@@ -422,17 +420,16 @@ BenchmarkProblems:
       InitialSolutionParameters:
       BenchmarkCommonParameters:
         - KernelLanguage: ["Assembly"]
-
       ForkParameters:
         #        - AssertSummationElementMultiple: [32]
         - MatrixInstruction:
-          #          - [16, 16, 16, 1, 1, 8, 8, 2, 2 ]  
-          - [16, 16, 32, 1, 1, 4, 4, 2, 2 ]  
-          - [16, 16, 32, 1, 1, 2, 8, 4, 1 ]  
-          - [16, 16, 32, 1, 1, 8, 2, 1, 4 ]  
-          - [32, 32, 16, 1, 1, 2, 2, 2, 2 ]  
-          - [32, 32, 16, 1, 1, 4, 1, 1, 4 ]  
-          - [32, 32, 16, 1, 1, 1, 4, 4, 1 ]  
+          #          - [16, 16, 16, 1, 1, 8, 8, 2, 2 ]
+          - [16, 16, 32, 1, 1, 4, 4, 2, 2 ]
+          - [16, 16, 32, 1, 1, 2, 8, 4, 1 ]
+          - [16, 16, 32, 1, 1, 8, 2, 1, 4 ]
+          - [32, 32, 16, 1, 1, 2, 2, 2, 2 ]
+          - [32, 32, 16, 1, 1, 4, 1, 1, 4 ]
+          - [32, 32, 16, 1, 1, 1, 4, 4, 1 ]
         - PrefetchGlobalRead: [2]
         - PrefetchLocalRead: [1]
           #        - ClusterLocalRead: [1]
@@ -476,8 +473,8 @@ BenchmarkProblems:
       DestDataType: h
       ComputeDataType: s
       HighPrecisionAccumulate: True
-      TransposeA: 0
-      TransposeB: 1
+      TransposeA: False
+      TransposeB: True
       UseBeta: True
       UseBias: 0
       Batched: True
@@ -487,17 +484,16 @@ BenchmarkProblems:
       InitialSolutionParameters:
       BenchmarkCommonParameters:
         - KernelLanguage: ["Assembly"]
-
       ForkParameters:
         #        - AssertSummationElementMultiple: [32]
         - MatrixInstruction:
-          #          - [16, 16, 16, 1, 1, 8, 8, 2, 2 ]  
-          - [16, 16, 32, 1, 1, 4, 4, 2, 2 ]  
-          - [16, 16, 32, 1, 1, 2, 8, 4, 1 ]  
-          - [16, 16, 32, 1, 1, 8, 2, 1, 4 ]  
-          - [32, 32, 16, 1, 1, 2, 2, 2, 2 ]  
-          - [32, 32, 16, 1, 1, 4, 1, 1, 4 ]  
-          - [32, 32, 16, 1, 1, 1, 4, 4, 1 ]  
+          #          - [16, 16, 16, 1, 1, 8, 8, 2, 2 ]
+          - [16, 16, 32, 1, 1, 4, 4, 2, 2 ]
+          - [16, 16, 32, 1, 1, 2, 8, 4, 1 ]
+          - [16, 16, 32, 1, 1, 8, 2, 1, 4 ]
+          - [32, 32, 16, 1, 1, 2, 2, 2, 2 ]
+          - [32, 32, 16, 1, 1, 4, 1, 1, 4 ]
+          - [32, 32, 16, 1, 1, 1, 4, 4, 1 ]
         - PrefetchGlobalRead: [2]
         - PrefetchLocalRead: [1]
           #        - ClusterLocalRead: [1]
@@ -541,8 +537,8 @@ BenchmarkProblems:
       DestDataType: b
       ComputeDataType: s
       HighPrecisionAccumulate: True
-      TransposeA: 1
-      TransposeB: 1
+      TransposeA: True
+      TransposeB: True
       UseBeta: True
       UseBias: 0
       Batched: True
@@ -552,16 +548,15 @@ BenchmarkProblems:
       InitialSolutionParameters:
       BenchmarkCommonParameters:
         - KernelLanguage: ["Assembly"]
-
       ForkParameters:
         #        - AssertSummationElementMultiple: [32]
         - MatrixInstruction:
-          - [16, 16, 32, 1, 1, 4, 4, 2, 2 ]  
-          - [16, 16, 32, 1, 1, 2, 8, 4, 1 ]  
-          - [16, 16, 32, 1, 1, 8, 2, 1, 4 ]  
-          - [32, 32, 16, 1, 1, 2, 2, 2, 2 ]  
-          - [32, 32, 16, 1, 1, 4, 1, 1, 4 ]  
-          - [32, 32, 16, 1, 1, 1, 4, 4, 1 ]  
+          - [16, 16, 32, 1, 1, 4, 4, 2, 2 ]
+          - [16, 16, 32, 1, 1, 2, 8, 4, 1 ]
+          - [16, 16, 32, 1, 1, 8, 2, 1, 4 ]
+          - [32, 32, 16, 1, 1, 2, 2, 2, 2 ]
+          - [32, 32, 16, 1, 1, 4, 1, 1, 4 ]
+          - [32, 32, 16, 1, 1, 1, 4, 4, 1 ]
         - PrefetchGlobalRead: [2]
         - PrefetchLocalRead: [1]
           #        - ClusterLocalRead: [1]
@@ -605,8 +600,8 @@ BenchmarkProblems:
       DestDataType: b
       ComputeDataType: s
       HighPrecisionAccumulate: True
-      TransposeA: 1
-      TransposeB: 1
+      TransposeA: True
+      TransposeB: True
       UseBeta: True
       UseBias: 0
       Batched: True
@@ -616,16 +611,15 @@ BenchmarkProblems:
       InitialSolutionParameters:
       BenchmarkCommonParameters:
         - KernelLanguage: ["Assembly"]
-
       ForkParameters:
         #        - AssertSummationElementMultiple: [32]
         - MatrixInstruction:
-          - [16, 16, 32, 1, 1, 4, 4, 2, 2 ]  
-          - [16, 16, 32, 1, 1, 2, 8, 4, 1 ]  
-          - [16, 16, 32, 1, 1, 8, 2, 1, 4 ]  
-          - [32, 32, 16, 1, 1, 2, 2, 2, 2 ]  
-          - [32, 32, 16, 1, 1, 4, 1, 1, 4 ]  
-          - [32, 32, 16, 1, 1, 1, 4, 4, 1 ]  
+          - [16, 16, 32, 1, 1, 4, 4, 2, 2 ]
+          - [16, 16, 32, 1, 1, 2, 8, 4, 1 ]
+          - [16, 16, 32, 1, 1, 8, 2, 1, 4 ]
+          - [32, 32, 16, 1, 1, 2, 2, 2, 2 ]
+          - [32, 32, 16, 1, 1, 4, 1, 1, 4 ]
+          - [32, 32, 16, 1, 1, 1, 4, 4, 1 ]
         - PrefetchGlobalRead: [2]
         - PrefetchLocalRead: [1]
           #        - ClusterLocalRead: [1]
@@ -669,8 +663,8 @@ BenchmarkProblems:
       DestDataType: h
       ComputeDataType: s
       HighPrecisionAccumulate: True
-      TransposeA: 1
-      TransposeB: 1
+      TransposeA: True
+      TransposeB: True
       UseBeta: True
       UseBias: 0
       Batched: True
@@ -680,16 +674,15 @@ BenchmarkProblems:
       InitialSolutionParameters:
       BenchmarkCommonParameters:
         - KernelLanguage: ["Assembly"]
-
       ForkParameters:
         #        - AssertSummationElementMultiple: [32]
         - MatrixInstruction:
-          - [16, 16, 32, 1, 1, 4, 4, 2, 2 ]  
-          - [16, 16, 32, 1, 1, 2, 8, 4, 1 ]  
-          - [16, 16, 32, 1, 1, 8, 2, 1, 4 ]  
-          - [32, 32, 16, 1, 1, 2, 2, 2, 2 ]  
-          - [32, 32, 16, 1, 1, 4, 1, 1, 4 ]  
-          - [32, 32, 16, 1, 1, 1, 4, 4, 1 ]  
+          - [16, 16, 32, 1, 1, 4, 4, 2, 2 ]
+          - [16, 16, 32, 1, 1, 2, 8, 4, 1 ]
+          - [16, 16, 32, 1, 1, 8, 2, 1, 4 ]
+          - [32, 32, 16, 1, 1, 2, 2, 2, 2 ]
+          - [32, 32, 16, 1, 1, 4, 1, 1, 4 ]
+          - [32, 32, 16, 1, 1, 1, 4, 4, 1 ]
         - PrefetchGlobalRead: [2]
         - PrefetchLocalRead: [1]
           #        - ClusterLocalRead: [1]
@@ -733,8 +726,8 @@ BenchmarkProblems:
       DestDataType: h
       ComputeDataType: s
       HighPrecisionAccumulate: True
-      TransposeA: 1
-      TransposeB: 1
+      TransposeA: True
+      TransposeB: True
       UseBeta: True
       UseBias: 0
       Batched: True
@@ -744,16 +737,15 @@ BenchmarkProblems:
       InitialSolutionParameters:
       BenchmarkCommonParameters:
         - KernelLanguage: ["Assembly"]
-
       ForkParameters:
         #        - AssertSummationElementMultiple: [32]
         - MatrixInstruction:
-          - [16, 16, 32, 1, 1, 4, 4, 2, 2 ]  
-          - [16, 16, 32, 1, 1, 2, 8, 4, 1 ]  
-          - [16, 16, 32, 1, 1, 8, 2, 1, 4 ]  
-          - [32, 32, 16, 1, 1, 2, 2, 2, 2 ]  
-          - [32, 32, 16, 1, 1, 4, 1, 1, 4 ]  
-          - [32, 32, 16, 1, 1, 1, 4, 4, 1 ]  
+          - [16, 16, 32, 1, 1, 4, 4, 2, 2 ]
+          - [16, 16, 32, 1, 1, 2, 8, 4, 1 ]
+          - [16, 16, 32, 1, 1, 8, 2, 1, 4 ]
+          - [32, 32, 16, 1, 1, 2, 2, 2, 2 ]
+          - [32, 32, 16, 1, 1, 4, 1, 1, 4 ]
+          - [32, 32, 16, 1, 1, 1, 4, 4, 1 ]
         - PrefetchGlobalRead: [2]
         - PrefetchLocalRead: [1]
           #        - ClusterLocalRead: [1]
@@ -786,6 +778,53 @@ BenchmarkProblems:
           - Exact: [512, 512, 1, 1088]
           - Exact: [519, 519, 1, 1120]
           - Exact: [2053, 2053, 1, 2053]
+
+  ########################################
+  # NN - standard HHS Test LDS > 64K Double Buffer
+  ########################################
+  -
+    - # ProblemType
+      OperationType: GEMM
+      DataType: h
+      DestDataType: h
+      ComputeDataType: s
+      HighPrecisionAccumulate: True
+      TransposeA: False
+      TransposeB: False
+      UseBeta: True
+      UseBias: 0 # 1
+      Batched: True
+      Activation: False
+      ActivationHPA: False
+    - # BenchmarkProblemSizeGroup - Standard - All problem
+      InitialSolutionParameters:
+      BenchmarkCommonParameters:
+        - KernelLanguage: ["Assembly"]
+      ForkParameters:
+        - MatrixInstruction:
+          - [32, 32, 16, 1, 1, 5, 3, 2, 2 ]
+        - ExpandPointerSwap: [0]
+        - PrefetchGlobalRead: [1]
+        - PrefetchLocalRead: [1]
+        - ClusterLocalRead: [0]
+        - DepthU: [32]
+        - LocalReadVectorWidth: [8]
+        - VectorWidthA: [1]
+        - ScheduleIterAlg: [3]
+        - TransposeLDS: [1] #0,1
+        - LdsBlockSizePerPadA: [-1]
+        - LdsBlockSizePerPadB: [-1]
+        - LdsPadA: [-1]
+        - LdsPadB: [-1]
+        - StaggerU: [0]
+        - StaggerUStride: [64]
+        - 1LDSBuffer: [0]
+        - LDSTrInst: [1] 
+        - SourceSwap: [1]
+      BenchmarkJoinParameters:
+      BenchmarkFinalParameters:
+        - ProblemSizes:
+          - Exact: [4096, 4096, 1, 8192]
 
   ########################################
   # HSS - Test LDS > 64K

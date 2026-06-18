@@ -69,7 +69,8 @@ bool gpu_arch_match(const std::string& gpu_arch, const char pattern[4]);
  ***************************************************************************/
 struct Arguments
 {
-    static constexpr int64_t c_scan_value = -999;
+    static constexpr int64_t c_scan_value   = -999;
+    static constexpr int64_t c_scan_value_2 = -998;
 
     /*************************************************************************
      *                    Beginning Of Arguments                             *
@@ -116,6 +117,7 @@ struct Arguments
     int64_t batch_count;
 
     int64_t scan;
+    int64_t scan_2;
 
     int32_t iters;
     int32_t cold_iters;
@@ -180,6 +182,7 @@ struct Arguments
     bool HMM; // xnack+
     bool graph_test;
     bool repeatability_check;
+    bool alpha_beta_stride;
 
     int use_hipblaslt;
 
@@ -229,6 +232,7 @@ struct Arguments
     OPER(incy) SEP                   \
     OPER(batch_count) SEP            \
     OPER(scan) SEP                   \
+    OPER(scan_2) SEP                 \
     OPER(iters) SEP                  \
     OPER(cold_iters) SEP             \
     OPER(algo) SEP                   \
@@ -247,8 +251,8 @@ struct Arguments
     OPER(api) SEP                    \
     OPER(pad) SEP                    \
     OPER(math_mode) SEP              \
-    OPER(flush_batch_count) SEP             \
-    OPER(flush_memory_size) SEP             \
+    OPER(flush_batch_count) SEP      \
+    OPER(flush_memory_size) SEP      \
     OPER(threads) SEP                \
     OPER(streams) SEP                \
     OPER(devices) SEP                \
@@ -269,6 +273,7 @@ struct Arguments
     OPER(HMM) SEP                    \
     OPER(graph_test) SEP             \
     OPER(repeatability_check) SEP    \
+    OPER(alpha_beta_stride) SEP      \
     OPER(use_hipblaslt) SEP          \
     OPER(cleanup)
     // clang-format on

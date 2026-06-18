@@ -32,6 +32,7 @@
 
 #pragma once
 
+#include "asan_helpers.hpp"
 #include "rocblas.hpp"
 #include "rocsolver/rocsolver.h"
 #include "rocsolver_run_specialized_kernels.hpp"
@@ -314,19 +315,16 @@ rocblas_status rocsolver_larf_template(rocblas_handle handle,
     }
 
     // get device prop
-    int device;
-    HIP_CHECK(hipGetDevice(&device));
-    hipDeviceProp_t props;
-    HIP_CHECK(hipGetDeviceProperties(&props, device));
+    const hipDeviceProp_t* props = rocblas_internal_get_device_prop(handle);
 
     // determine side
     bool leftside = (side == rocblas_side_left);
 
-    static constexpr int NB = 1024;
-    const int lds_size = leftside ? (m + (NB / props.warpSize)) * sizeof(T)
-                                  : (n + (NB / props.warpSize)) * sizeof(T);
+    static constexpr int NB = ROCSOLVER_ASAN_VALUE(256, 1024);
+    const int lds_size = leftside ? (m + (NB / props->warpSize)) * sizeof(T)
+                                  : (n + (NB / props->warpSize)) * sizeof(T);
 
-    if(lds_size <= props.sharedMemPerBlock)
+    if(lds_size <= props->sharedMemPerBlock)
     {
         // Launch larf kernel if tune parameters are met.
         if(leftside && (n <= 1024 || m >= 2048))

@@ -11,7 +11,7 @@ def runCI =
     def prj = new rocProject('rocRoller', 'Documentation')
 
     //use docker files from this repo
-    prj.repoDockerfile = true
+    prj.repoDockerfile = false
     prj.defaults.ccache = true
 
     def uniqueTag = params?."Unique Docker image tag" ? org.apache.commons.lang.RandomStringUtils.random(9, true, true) : ""
@@ -127,8 +127,6 @@ ci: {
     if(!jobNameList.keySet().contains(urlJobName))
     {
         properties(auxiliary.addCommonProperties([pipelineTriggers([cron('0 1 * * 6')])]))
-        stage(urlJobName) {
-            runCI(["rocroller-ubuntu20-clang":['rocroller-compile']], urlJobName)
-        }
+        runCI(["rocroller-ubuntu20-clang":['rocroller-compile']], urlJobName)
     }
 }

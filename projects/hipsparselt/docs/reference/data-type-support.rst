@@ -28,8 +28,8 @@ the following table.
       - Full support
 
 
-For more information about data type support for the other ROCm libraries, see 
-:doc:`Data types and precision support page <rocm:reference/precision-support>`. 
+For more information about data type support for the other ROCm libraries, see
+:doc:`Data types and precision support page <rocm:reference/precision-support>`.
 
 Supported input and output types
 ================================
@@ -61,6 +61,16 @@ List of supported input and output types:
     - ✅
     - ✅
   *
+    - float8_fnuz
+    - HIP_R_8F_E4M3_FNUZ
+    - ✅
+    - ❌
+  *
+    - bfloat8_fnuz
+    - HIP_R_8F_E5M2_FNUZ
+    - ✅
+    - ❌
+  *
     - int16
     - Not supported
     - ❌
@@ -78,7 +88,7 @@ List of supported input and output types:
   *
     - int32
     - HIP_R_32I
-    - ❌
+    - ✅
     - ✅
   *
     - tensorfloat32
@@ -88,7 +98,7 @@ List of supported input and output types:
   *
     - float32
     - HIP_R_32F
-    - ❌
+    - ✅
     - ✅
   *
     - float64
@@ -174,7 +184,7 @@ List of supported compute types for specific input and output types:
     "HIP_R_16F", "HIP_R_16F", "HIP_R_16F", "HIPSPARSELT_COMPUTE_16F", "CUDA", ""
     "HIP_R_16BF", "HIP_R_16BF", "HIP_R_16BF", "HIPSPARSELT_COMPUTE_32F", "HIP / CUDA", "gfx942, gfx950"
     "HIP_R_8I", "HIP_R_8I", "HIP_R_8I", "HIPSPARSELT_COMPUTE_32I", "HIP / CUDA", "gfx942, gfx950"
-    "HIP_R_8I", "HIP_R_32I", "HIP_R_32I", "HIPSPARSELT_COMPUTE_32I", "CUDA", ""
+    "HIP_R_8I", "HIP_R_32I", "HIP_R_32I", "HIPSPARSELT_COMPUTE_32I", "HIP / CUDA", "gfx942, gfx950"
     "HIP_R_8I", "HIP_R_16F", "HIP_R_16F", "HIPSPARSELT_COMPUTE_32I", "HIP / CUDA", "gfx942, gfx950"
     "HIP_R_8I", "HIP_R_16BF", "HIP_R_16BF", "HIPSPARSELT_COMPUTE_32I", "HIP / CUDA", "gfx942, gfx950"
     "HIP_R_8F_E4M3", "HIP_R_16F", "HIP_R_8F_E4M3", "HIPSPARSELT_COMPUTE_32F", "CUDA", ""
@@ -187,3 +197,5 @@ List of supported compute types for specific input and output types:
     "HIP_R_8F_E5M2", "HIP_R_16F", "HIP_R_16F", "HIPSPARSELT_COMPUTE_32F", "CUDA", ""
     "HIP_R_8F_E5M2", "HIP_R_16BF", "HIP_R_16BF", "HIPSPARSELT_COMPUTE_32F", "CUDA", ""
     "HIP_R_8F_E5M2", "HIP_R_32F", "HIP_R_32F", "HIPSPARSELT_COMPUTE_32F", "HIP / CUDA", "gfx950"
+    "HIP_R_8F_E4M3_FNUZ", "HIP_R_32F", "HIP_R_32F", "HIPSPARSELT_COMPUTE_32F", "HIP", "gfx942"
+    "HIP_R_8F_E5M2_FNUZ", "HIP_R_32F", "HIP_R_32F", "HIPSPARSELT_COMPUTE_32F", "HIP", "gfx942"        

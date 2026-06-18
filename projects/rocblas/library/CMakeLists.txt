@@ -141,9 +141,8 @@ function( rocblas_library_settings lib_target_ )
   endif()
 
   if(BUILD_CODE_COVERAGE)
-    #target_compile_options(-fprofile-instr-generate -fcoverage-mapping)
-    target_compile_options( ${lib_target_} PRIVATE -fprofile-arcs -ftest-coverage )
-    target_link_libraries( ${lib_target_} PRIVATE --coverage -lgcov)
+    target_compile_options(${lib_target_} PRIVATE -fprofile-instr-generate -fcoverage-mapping)
+    target_link_options(${lib_target_} PRIVATE -fprofile-instr-generate)
   endif()
 
   rocm_set_soversion( ${lib_target_} ${rocblas_SOVERSION} )
@@ -159,7 +158,7 @@ set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 
 # This is incremented when the ABI to the library changes
-set( rocblas_SOVERSION 5.1 )
+set( rocblas_SOVERSION 5.5 )
 
 list( APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake )
 
@@ -227,6 +226,13 @@ endif()
 # configure a header file to pass the CMake version settings to the source, and package the header files in the output archive
 configure_file( "${CMAKE_CURRENT_SOURCE_DIR}/include/internal/rocblas-version.h.in"
 	"${PROJECT_BINARY_DIR}/include/rocblas/internal/rocblas-version.h" )
+
+# Configure Windows version resource file
+if(WIN32)
+  string(TIMESTAMP ROCBLAS_COPYRIGHT_YEAR "%Y")
+  configure_file( "${CMAKE_CURRENT_SOURCE_DIR}/src/version.rc.in"
+    "${PROJECT_BINARY_DIR}/version.rc" @ONLY )
+endif()
 
 
 set( rocblas_headers_public

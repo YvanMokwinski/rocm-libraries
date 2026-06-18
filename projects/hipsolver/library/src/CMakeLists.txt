@@ -1,5 +1,5 @@
 # ########################################################################
-# Copyright (C) 2016-2024 Advanced Micro Devices, Inc. All rights reserved.
+# Copyright (C) 2016-2026 Advanced Micro Devices, Inc. All rights reserved.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -40,7 +40,7 @@ endfunction()
 # ########################################################################
 prepend_path(".." hipsolver_headers_public relative_hipsolver_headers_public)
 
-if(NOT USE_CUDA)
+if(NOT "${HIP_PLATFORM}" STREQUAL "nvidia")
   set(hipsolver_source
     "${CMAKE_CURRENT_SOURCE_DIR}/amd_detail/hipsolver_conversions.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/amd_detail/hipsolver.cpp"
@@ -75,7 +75,17 @@ set(hipsolver_f90_source
 if(BUILD_FORTRAN_BINDINGS)
   # Create hipSOLVER Fortran module
   add_library(hipsolver_fortran ${hipsolver_f90_source})
-  rocm_install(TARGETS hipsolver_fortran)
+  rocm_set_soversion(hipsolver_fortran ${hipsolver_SOVERSION})
+  if(EXPORT_FORTRAN_BINDINGS)
+    rocm_install(TARGETS hipsolver_fortran)
+  else()
+    # Install the shared object without adding it to the
+    # hipsolver-targets export set, so find_package(hipsolver)
+    # does not reference roc::hipsolver_fortran.
+    install(TARGETS hipsolver_fortran
+            LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+            COMPONENT runtime)
+  endif()
 endif()
 
 add_library(hipsolver
@@ -87,6 +97,11 @@ add_library(roc::hipsolver ALIAS hipsolver)
 target_link_libraries(hipsolver PRIVATE
   $<BUILD_INTERFACE:hipsolver-common> # https://gitlab.kitware.com/cmake/cmake/-/issues/15415
 )
+
+if(BUILD_CODE_COVERAGE)
+  target_compile_options(hipsolver PRIVATE -g -O0 -fprofile-instr-generate -fcoverage-mapping)
+  target_link_options(hipsolver PUBLIC -fprofile-instr-generate)
+endif()
 
 add_armor_flags(hipsolver "${ARMOR_LEVEL}")
 
@@ -112,7 +127,7 @@ if(NOT BUILD_WITH_SPARSE)
 endif()
 
 # Build hipsolver from source on AMD platform
-if(NOT USE_CUDA)
+if(NOT "${HIP_PLATFORM}" STREQUAL "nvidia")
   # Find rocBLAS
   if(NOT TARGET rocblas)
     if(CUSTOM_ROCBLAS)
@@ -133,6 +148,12 @@ if(NOT USE_CUDA)
       find_package(rocsolver REQUIRED CONFIG PATHS /opt/rocm /opt/rocm/rocsolver /usr/local/rocsolver)
     endif()
     list(APPEND static_depends PACKAGE rocsolver)
+  endif()
+
+  # TODO: This LAPACK dependency is only required to support geev
+  # It should be removed once geev is implemented in rocSOLVER
+  if(NOT "${HIP_PLATFORM}" STREQUAL "nvidia")
+      target_link_libraries(hipsolver PRIVATE lapack_libraries)
   endif()
 
   target_link_libraries(hipsolver PRIVATE roc::rocblas roc::rocsolver)
@@ -203,6 +224,15 @@ set_target_properties(hipsolver PROPERTIES CXX_VISIBILITY_PRESET "hidden" VISIBI
 generate_export_header(hipsolver EXPORT_FILE_NAME ${PROJECT_BINARY_DIR}/include/hipsolver/internal/hipsolver-export.h)
 
 execute_process(COMMAND ${CMAKE_COMMAND} -E copy_directory ${PROJECT_SOURCE_DIR}/library/include ${PROJECT_BINARY_DIR}/include/hipsolver)
+if(BUILD_FILE_REORG_BACKWARD_COMPATIBILITY)
+  rocm_wrap_header_file(
+    internal/hipsolver-version.h internal/hipsolver-export.h
+    GUARDS SYMLINK WRAPPER
+    WRAPPER_LOCATIONS ${CMAKE_INSTALL_INCLUDEDIR} hipsolver/${CMAKE_INSTALL_INCLUDEDIR}
+    ORIGINAL_FILES ${PROJECT_BINARY_DIR}/include/hipsolver/internal/hipsolver-version.h
+  )
+endif()
+
 
 # Following Boost conventions of prefixing 'lib' on static built libraries, across all platforms
 if(NOT BUILD_SHARED_LIBS)
@@ -218,7 +248,7 @@ rocm_install_targets(
     ${CMAKE_BINARY_DIR}/include
 )
 
-if(NOT USE_CUDA)
+if(NOT "${HIP_PLATFORM}" STREQUAL "nvidia")
   rocm_export_targets(
     TARGETS roc::hipsolver
     DEPENDS PACKAGE hip
@@ -242,3 +272,29 @@ if(BUILD_FORTRAN_MODULE)
             DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/hipsolver")
   endif()
 endif()
+
+if(BUILD_FILE_REORG_BACKWARD_COMPATIBILITY)
+  rocm_install(
+    DIRECTORY
+       "${PROJECT_BINARY_DIR}/hipsolver"
+        DESTINATION ".")
+
+  if(NOT WIN32)
+
+    # Create SymLink for Fortran Object Module for backward compatibility
+    rocm_install(
+      CODE "
+        set(PREFIX \$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX})
+	set(INPUT_FILE \${PREFIX}/include/hipsolver/hipsolver_module.f90)
+        set(SYMLINK_LOCATIONS \${PREFIX}/hipsolver/include \${PREFIX}/include)
+        foreach(LOCATION IN LISTS SYMLINK_LOCATIONS)
+          file(MAKE_DIRECTORY \${LOCATION})
+          execute_process(COMMAND ln -sfr \${INPUT_FILE} \${LOCATION})
+          message(STATUS \"Created symlink in \${LOCATION} to \${INPUT_FILE}.\")
+        endforeach()
+        "
+    )
+  endif() # NOT WIN32
+  message(STATUS "Backward Compatible Sym Link Created for include directories")
+endif()
+

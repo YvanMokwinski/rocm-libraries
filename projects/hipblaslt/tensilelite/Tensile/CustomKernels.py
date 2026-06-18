@@ -93,11 +93,12 @@ def getCustomKernelConfig(
     for key in internalSupportParams:
         if key not in kernelIsp:
             kernelIsp[key] = internalSupportParams[key]
-    
+
     validParameters.update(newMIValidParameters)
 
+    skipKeys = {"ProblemType", "InternalSupportParams", "KernelLanguage", "CustomKernelName"}
     for k, v in kernelConfig.items():
-        if k != "ProblemType":
+        if k not in skipKeys:
             checkParametersAreValid((k, [v]), validParameters)
 
     kernelConfig["KernelLanguage"] = "Assembly"

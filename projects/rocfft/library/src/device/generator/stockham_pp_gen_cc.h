@@ -1,4 +1,4 @@
-// Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -19,20 +19,13 @@
 // THE SOFTWARE.
 
 #pragma once
-#include "stockham_gen_cc.h"
+#include "stockham_pp_gen.h"
 
-// TODO: Once partial pass is fully configurable in kernel-generator.py:
-//      - Test with factors_pp.size() > 1.
-//      - Revisit all usages of transforms_per_block_pp and threads_per_transform.
-//      - Different input/output strides.
-//      - Revisit mod 128 usage in calculate_offsets() with different input lengths,
-//        (logic is required to work with nbatch > 1)
-//      - Revisit factor 192 logic in calculate_offsets() with different input lengths
-//      - Revisit and test local transpose logic for different input lengths
+// TODO: Support non-unit input/output strides.
 
 // Variation of StockhamKernelCC that implements the partial pass
 // method. Similarities of StockhamPartialPassKernelCC with
-// StockhamKernelCC include the overal kernel structure with the
+// StockhamKernelCC include the overall kernel structure with the
 // main operations: (1) global-to-LDS, (2) LDS-to-register,
 // (3) full forward/backward pass in the designated direction,
 // (4) register-to-LDS and (5) LDS-to-global. The main difference
@@ -44,50 +37,61 @@
 // in the off-direction. Another difference is how data is accessed
 // in global memory, and this is reflected in how calculate_offsets()
 // is implemented.
-struct StockhamPartialPassKernelCC : public StockhamKernelCC
+struct StockhamPartialPassKernelCC : public StockhamPartialPassKernel
 {
     explicit StockhamPartialPassKernelCC(const StockhamGeneratorSpecs&    specs,
                                          const StockhamPartialPassParams& params,
                                          bool largeTwdBatchIsTransformCount)
-        : StockhamKernelCC(specs, largeTwdBatchIsTransformCount, false)
-        , params(params)
+        : StockhamPartialPassKernel(specs, params)
+        , largeTwdBatchIsTransformCount(largeTwdBatchIsTransformCount)
 
     {
-        factors_pp = params.factors_off_dim;
-
-        max_factor_pp = *std::max_element(factors_pp.begin(), factors_pp.end());
-
-        transforms_per_block_pp = transforms_per_block;
+        transforms_per_block_unscaled = transforms_per_block;
 
         transforms_per_block *= max_factor_pp;
         workgroup_size *= max_factor_pp;
+
+        switch(params.off_dim)
+        {
+        case 0:
+            throw std::runtime_error(
+                "StockhamPartialPassKernelCC:: partial-passes along x not currently supported");
+            break;
+        case 1:
+            num_blocks_per_batch = (params.parent_length[1] - 1) / transforms_per_block + 1;
+            num_blocks_per_batch *= params.parent_length[2];
+            break;
+        case 2:
+            throw std::runtime_error(
+                "StockhamPartialPassKernelCC:: partial-passes along z not currently supported");
+            break;
+        default:
+            throw std::runtime_error("StockhamPartialPassKernelCC:: Unexpected off_dim value");
+        }
     }
 
-    StockhamPartialPassParams params;
+    std::string tiling_name() override
+    {
+        return "SBCC";
+    }
 
-    unsigned int transforms_per_block_pp;
-    unsigned int max_factor_pp;
+    bool largeTwdBatchIsTransformCount = false;
 
-    std::vector<unsigned int> factors_pp;
+    unsigned int num_blocks_per_batch;
+
+    unsigned int transforms_per_block_unscaled;
+
+    Variable trans_local{"trans_local", "size_t"};
 
     Variable thread_lds{"thread_lds", "unsigned int"};
-    Variable stride_lds_pp{"stride_lds_pp", "unsigned int"};
-    Variable offset_lds_pp{"offset_lds_pp", "unsigned int"};
 
     Variable tid_hor_lds{"tid_hor_lds", "unsigned int"};
     Variable tid_hor_pp{"tid_hor_pp", "unsigned int"};
     Variable offset_tid_hor{"offset_tid_hor", "unsigned int"};
-    Variable offset_pp{"offset_pp", "unsigned int"};
-    Variable thread_new{"thread_new", "unsigned int"};
-    Variable batch_new{"batch_new", "unsigned int"};
 
-    Variable thread_idx{"thread_idx", "unsigned int"};
-    Variable block_idx{"block_idx", "unsigned int"};
+    Variable block_idx_pp{"block_idx_pp", "unsigned int"};
 
     Variable thread_in_device_twd{"thread_in_device_twd", "unsigned int"};
-
-    Variable global_idx{"global_idx", "unsigned int"};
-    Variable transpose_idx{"transpose_idx", "unsigned int"};
 
     std::vector<unsigned int> launcher_lengths() override
     {
@@ -102,6 +106,169 @@ struct StockhamPartialPassKernelCC : public StockhamKernelCC
     unsigned int launcher_transforms_per_block() override
     {
         return transforms_per_block / max_factor_pp;
+    }
+
+    // Call generator as many times as needed.
+    // generator accepts h, hr, width, dt, guard_pred parameters
+    StatementList
+        add_work(std::function<StatementList(
+                     unsigned int, unsigned int, unsigned int, unsigned int, Expression)> generator,
+                 unsigned int                                                             width,
+                 double                                                                   height,
+                 ThreadGuardMode                                                          guard,
+                 bool                               trans_dir    = false,
+                 const std::optional<unsigned int>& guard_factor = std::nullopt,
+                 const std::optional<unsigned int>& work_length  = std::nullopt) const
+    {
+        StatementList stmts;
+        unsigned int  iheight = std::floor(height);
+        if(height > iheight && threads_per_transform > length / width)
+            iheight += 1;
+
+        Expression guard_expr = Expression{Literal{"true"}};
+
+        const auto effective_length = work_length ? *work_length : length;
+        const auto thread_guard_cond
+            = (effective_length / width) * (guard_factor ? *guard_factor : 1);
+
+        // do thread guard when guard_by_if or guard_by_arg
+        if(guard != ThreadGuardMode::NO_GUARD)
+        {
+            // using ">" : no need to test "if(thread < XXX)"" if it is always true
+            if((!trans_dir && threads_per_transform > (effective_length / width))
+               || (trans_dir && workgroup_size / transforms_per_block > (effective_length / width)))
+            {
+                if(writeGuard)
+                    guard_expr = Expression{write && (thread < thread_guard_cond)};
+                else
+                    guard_expr = Expression{thread < thread_guard_cond};
+            }
+            else
+            {
+                if(writeGuard)
+                    guard_expr = Expression{write};
+            }
+        }
+
+        StatementList work;
+        for(unsigned int h = 0; h < iheight; ++h)
+            work += generator(h, 0, width, 0, guard_expr);
+
+        // guard_expr is not a trivial value "true"
+        if(guard == ThreadGuardMode::GUARD_BY_IF && !std::holds_alternative<Literal>(guard_expr))
+        {
+            stmts += CommentLines{"more than enough threads, some do nothing"};
+            stmts += If{guard_expr, work};
+        }
+        else
+        {
+            stmts += work;
+        }
+
+        if(height > iheight && threads_per_transform < effective_length / width)
+        {
+            stmts += CommentLines{"not enough threads, some threads do extra work"};
+            unsigned int dt = iheight * threads_per_transform;
+
+            // always do thread guard
+            if(writeGuard)
+                guard_expr = Expression{write && (thread + dt < thread_guard_cond)};
+            else
+                guard_expr = Expression{thread + dt < thread_guard_cond};
+
+            work = generator(0, iheight, width, dt, guard_expr);
+
+            // put in if only if guard_by_if
+            if(guard == ThreadGuardMode::GUARD_BY_IF)
+                stmts += If{guard_expr, work};
+            else
+                stmts += work;
+        }
+
+        return stmts;
+    }
+
+    StatementList calculate_offsets() override
+    {
+        Variable d{"d", "int"};
+        Variable index_along_d{"index_along_d", "size_t"};
+        Variable remaining{"remaining", "size_t"};
+        Variable plength{"plength", "size_t"};
+        Variable global_stride_in{"global_stride_in", "const size_t"};
+        Variable global_stride_out{"global_stride_out", "const size_t"};
+
+        StatementList stmts;
+        stmts += Declaration{tile_index};
+        stmts += Declaration{num_of_tiles};
+
+        stmts += Declaration(block_idx_pp, block_id % Parens{grid_dim / nbatch});
+
+        stmts += LineBreak{};
+        stmts += CommentLines{"calculate offset for each tile:",
+                              "  tile_index  now means index of the tile along dim1",
+                              "  num_of_tiles now means number of tiles along dim1"};
+        stmts += Declaration{plength, 1};
+        stmts += Declaration{remaining};
+        stmts += Declaration{index_along_d};
+        stmts += Assign{num_of_tiles, (lengths[1] - 1) / transforms_per_block_unscaled + 1};
+        stmts += Assign{plength, num_of_tiles};
+        stmts += Assign{tile_index, block_idx_pp % num_of_tiles};
+
+        stmts += Assign{remaining, (block_idx_pp % num_blocks_per_batch) / num_of_tiles};
+        stmts += Assign{offset, tile_index * transforms_per_block_unscaled * stride[1]};
+        stmts += For{d,
+                     2,
+                     d < dim,
+                     1,
+                     {Assign{plength, plength * lengths[d]},
+                      Assign{index_along_d, remaining % lengths[d]},
+                      Assign{remaining, remaining / lengths[d]},
+                      Assign{offset, offset + index_along_d * stride[d]}}};
+
+        stmts += LineBreak{};
+
+        stmts += Assign{batch, block_id / (plength / pp_factors_prod)};
+
+        stmts += Assign{transform,
+                        tile_index * transforms_per_block_unscaled
+                            + thread_id / threads_per_transform};
+        stmts += Assign{stride_lds, (length + get_lds_padding())};
+
+        stmts += MultiplyAssign(stride_lds, Literal{pp_factors_prod});
+
+        stmts += Declaration{
+            in_bound,
+            Ternary{Parens((tile_index + 1) * transforms_per_block_unscaled > lengths[1]),
+                    "false",
+                    "true"}};
+
+        stmts += Declaration{thread, thread_id / transforms_per_block_unscaled};
+        stmts += Declaration{tid_hor, thread_id % transforms_per_block_unscaled};
+
+        stmts += Declaration{thread_lds, thread_id / transforms_per_block_unscaled};
+        stmts += Declaration{tid_hor_lds, thread_id % transforms_per_block_unscaled};
+
+        stmts += Declaration(tid_hor_pp,
+                             thread_id % transforms_per_block_unscaled
+                                 + lengths[1] * (thread % pp_factors_prod));
+        stmts += Declaration(thread_pp, thread_id / (transforms_per_block));
+
+        stmts += Declaration(
+            offset_pp,
+            offset + Parens(offset / lengths[1]) * (lengths[1] * pp_factors_prod - lengths[1])
+                + batch * stride[dim]);
+        stmts += Declaration(offset_tid_hor, offset_pp + tid_hor_pp * stride[1]);
+
+        stmts += Assign{transform,
+                        tile_index * transforms_per_block_unscaled
+                            + thread_id / (threads_per_transform * pp_factors_prod)};
+
+        stmts += Assign{offset_lds,
+                        Ternary{lds_linear,
+                                stride_lds * (transform % transforms_per_block_unscaled),
+                                thread_id % transforms_per_block_unscaled}};
+
+        return stmts;
     }
 
     StatementList load_global_generator(unsigned int h,
@@ -143,179 +310,11 @@ struct StockhamPartialPassKernelCC : public StockhamKernelCC
         return load;
     }
 
-    StatementList store_pp_step_3_4_lds_generator(
-        unsigned int h, unsigned int hr, unsigned int width, unsigned int dt, Expression guard)
-    {
-        if(hr == 0)
-            hr = h;
-        StatementList work;
-
-        for(unsigned int w = 0; w < width; ++w)
-            work += Assign(lds_complex[offset_lds + (w * stride_lds)], R[w]);
-
-        return work;
-    }
-
-    Function generate_lds_from_reg_output_pp_step_3_4_function()
-    {
-        std::string function_name
-            = "lds_from_reg_output_pp_step_3_4_length" + std::to_string(length) + "_device";
-
-        Function f{function_name};
-        f.templates = device_lds_reg_inout_templates();
-        f.arguments = device_lds_reg_inout_pp_arguments();
-        f.qualifier = "__device__";
-
-        StatementList& body = f.body;
-        body += Declaration{
-            lstride, Ternary{Parens{stride_type == "SB_UNIT"}, Parens{1}, Parens{stride_lds}}};
-
-        auto store_lds = std::mem_fn(&StockhamPartialPassKernelCC::store_pp_step_3_4_lds_generator);
-        // last pass of store (full)
-        unsigned int width  = factors.back();
-        float        height = static_cast<float>(length) / width / threads_per_transform;
-        body += SyncThreads();
-        body += add_work(std::bind(store_lds, this, _1, _2, _3, _4, _5),
-                         width,
-                         height,
-                         ThreadGuardMode::NO_GUARD);
-        return f;
-    }
-
-    StatementList load_lds_step_3_4_generator(
-        unsigned int h, unsigned int hr, unsigned int width, unsigned int dt, Expression guard)
-    {
-        if(hr == 0)
-            hr = h;
-        StatementList work;
-
-        for(unsigned int w = 0; w < width; ++w)
-            work += Assign(R[w], lds_complex[offset_lds + (w * stride_lds)]);
-
-        return work;
-    }
-
-    ArgumentList device_lds_reg_inout_pp_arguments()
-    {
-        ArgumentList args{R, lds_complex, stride_lds, offset_lds};
-        return args;
-    }
-
-    std::vector<Expression> device_lds_reg_inout_pp_device_call_arguments()
-    {
-        return {R, lds_complex, stride_lds_pp, offset_lds_pp};
-    }
-
-    Function generate_lds_to_reg_input_step_3_4_function()
-    {
-        std::string function_name
-            = "lds_to_reg_input_pp_step_3_4_length" + std::to_string(length) + "_device";
-
-        Function f{function_name};
-        f.templates = device_lds_reg_inout_templates();
-        f.arguments = device_lds_reg_inout_pp_arguments();
-        f.qualifier = "__device__";
-
-        StatementList& body = f.body;
-
-        auto load_lds = std::mem_fn(&StockhamPartialPassKernelCC::load_lds_step_3_4_generator);
-        // first pass of load (full)
-        unsigned int width  = factors[0];
-        float        height = static_cast<float>(length) / width / threads_per_transform;
-        body += SyncThreads();
-        body += add_work(std::bind(load_lds, this, _1, _2, _3, _4, _5),
-                         width,
-                         height,
-                         ThreadGuardMode::NO_GUARD);
-
-        return f;
-    }
-
-    StatementList calculate_offsets() override
-    {
-        Variable d{"d", "int"};
-        Variable index_along_d{"index_along_d", "size_t"};
-        Variable remaining{"remaining", "size_t"};
-        Variable plength{"plength", "size_t"};
-        Variable global_stride_in{"global_stride_in", "const size_t"};
-        Variable global_stride_out{"global_stride_out", "const size_t"};
-
-        StatementList stmts;
-        stmts += Declaration{tile_index};
-        stmts += Declaration{num_of_tiles};
-
-        stmts += LineBreak{};
-        stmts += CommentLines{"calculate offset for each tile:",
-                              "  tile_index  now means index of the tile along dim1",
-                              "  num_of_tiles now means number of tiles along dim1"};
-        stmts += Declaration{plength, 1};
-        stmts += Declaration{remaining};
-        stmts += Declaration{index_along_d};
-        stmts += Assign{num_of_tiles, (lengths[1] - 1) / transforms_per_block_pp + 1};
-        stmts += Assign{plength, num_of_tiles};
-        stmts += Assign{tile_index, block_id % num_of_tiles};
-
-        stmts += Assign{remaining, (block_id % 128) / num_of_tiles};
-        stmts += Assign{offset, tile_index * transforms_per_block_pp * stride[1]};
-        stmts += For{d,
-                     2,
-                     d < dim,
-                     1,
-                     {Assign{plength, plength * lengths[d]},
-                      Assign{index_along_d, remaining % lengths[d]},
-                      Assign{remaining, remaining / lengths[d]},
-                      Assign{offset, offset + index_along_d * stride[d]}}};
-
-        stmts += LineBreak{};
-
-        stmts += Assign{batch, block_id / plength};
-
-        stmts += Assign{transform,
-                        tile_index * transforms_per_block_pp + thread_id / threads_per_transform};
-        stmts += Assign{stride_lds, (length + get_lds_padding())};
-
-        stmts += MultiplyAssign(stride_lds, Literal{max_factor_pp});
-
-        stmts += Declaration{
-            in_bound,
-            Ternary{
-                Parens((tile_index + 1) * transforms_per_block_pp > lengths[1]), "false", "true"}};
-
-        stmts += Declaration{thread, thread_id / transforms_per_block_pp};
-        stmts += Declaration{tid_hor, thread_id % transforms_per_block_pp};
-
-        stmts += Declaration{thread_lds, thread_id / transforms_per_block_pp};
-        stmts += Declaration{tid_hor_lds, thread_id % transforms_per_block_pp};
-
-        stmts += Declaration(
-            tid_hor_pp, thread_id % transforms_per_block_pp + length * (thread % max_factor_pp));
-        stmts += Declaration(thread_new, thread_id / (transforms_per_block_pp * max_factor_pp));
-        stmts += Declaration(batch_new, block_id / (plength / max_factor_pp));
-
-        stmts += Declaration(thread_idx, thread_id);
-        stmts += Declaration(block_idx, block_id);
-
-        stmts += Declaration(
-            offset_pp, offset + Parens(offset / length) * Literal{192} + batch_new * stride[dim]);
-        stmts += Declaration(offset_tid_hor, offset_pp + tid_hor_pp * stride[1]);
-
-        stmts += Assign{transform,
-                        tile_index * transforms_per_block_pp
-                            + thread_id / (threads_per_transform * max_factor_pp)};
-
-        stmts += Assign{offset_lds,
-                        Ternary{lds_linear,
-                                stride_lds * (transform % transforms_per_block_pp),
-                                thread_id % transforms_per_block_pp}};
-
-        return stmts;
-    }
-
     StatementList load_from_global(bool load_registers) override
     {
         StatementList stmts;
         StatementList tmp_stmts;
-        Expression    pred{tile_index * transforms_per_block_pp + tid_hor < lengths[1]};
+        Expression    pred{tile_index * transforms_per_block_unscaled + tid_hor < lengths[1]};
 
         if(!load_registers)
         {
@@ -323,7 +322,7 @@ struct StockhamPartialPassKernelCC : public StockhamKernelCC
             auto stripmine_h = workgroup_size / stripmine_w;
 
             auto offset_tile_rbuf
-                = [&](unsigned int i) { return (thread_new + i * stripmine_h) * stride0; };
+                = [&](unsigned int i) { return (thread_pp + i * stripmine_h) * stride0; };
             auto offset_tile_wlds = [&](unsigned int i) {
                 return tid_hor_lds * stride_lds
                        + (thread_lds + i * stripmine_h * max_factor_pp) * 1;
@@ -360,7 +359,7 @@ struct StockhamPartialPassKernelCC : public StockhamKernelCC
                                                   Expression{Parens(in_bound || pred)}),
                                         width,
                                         height,
-                                        ThreadGuardMode::GURAD_BY_FUNC_ARG,
+                                        ThreadGuardMode::GUARD_BY_FUNC_ARG,
                                         true);
 
             tmp_stmts += add_work(
@@ -380,56 +379,17 @@ struct StockhamPartialPassKernelCC : public StockhamKernelCC
         return stmts;
     }
 
-    StatementList store_global_generator(unsigned int h,
-                                         unsigned int hr,
-                                         unsigned int width,
-                                         unsigned int dt,
-                                         Expression   guard,
-                                         unsigned int cumheight,
-                                         bool         intrinsic,
-                                         Expression   pred)
-    {
-        if(hr == 0)
-            hr = h;
-        StatementList work;
-        for(unsigned int w = 0; w < width; ++w)
-        {
-            auto tid = Parens{thread + dt + h * threads_per_transform};
-            auto idx
-                = Parens{tid / cumheight} * (width * cumheight) + tid % cumheight + w * cumheight;
-
-            if(intrinsic)
-            {
-                // no need to and with trivial "true"
-                work += IntrinsicStore{buf,
-                                       tid_hor * stride[1] + Parens{Expression{idx}} * stride0,
-                                       offset,
-                                       R[hr * width + w],
-                                       std::holds_alternative<Literal>(guard) ? pred
-                                                                              : (guard && pred)};
-            }
-            else
-            {
-                work
-                    += StoreGlobal{buf,
-                                   offset + tid_hor * stride[1] + Parens{Expression{idx}} * stride0,
-                                   R[hr * width + w]};
-            }
-        }
-        return work;
-    }
-
     StatementList store_to_global(bool store_registers = false) override
     {
         StatementList stmts;
         StatementList tmp_stmts;
-        Expression    pred{tile_index * transforms_per_block_pp + tid_hor < lengths[1]};
+        Expression    pred{tile_index * transforms_per_block_unscaled + tid_hor < lengths[1]};
 
         auto stripmine_w = transforms_per_block;
         auto stripmine_h = workgroup_size / stripmine_w;
 
         auto offset_tile_wbuf = [&](unsigned int i) {
-            return offset_tid_hor + (thread_new + i * stripmine_h) * stride0;
+            return offset_tid_hor + (thread_pp + i * stripmine_h) * stride0;
         };
         auto offset_tile_rlds = [&](unsigned int i) {
             return tid_hor_lds * stride_lds + (thread_lds + i * stripmine_h * max_factor_pp) * 1;
@@ -450,40 +410,6 @@ struct StockhamPartialPassKernelCC : public StockhamKernelCC
         return stmts;
     }
 
-    StatementList load_lds_pp_generator(unsigned int h,
-                                        unsigned int hr,
-                                        unsigned int width,
-                                        unsigned int dt,
-                                        Expression   guard,
-                                        Component    component)
-    {
-        if(hr == 0)
-            hr = h;
-        StatementList work;
-
-        for(unsigned int w = 0; w < width; ++w)
-        {
-            const auto tid = Parens{thread + dt + h * threads_per_transform};
-            const auto idx = offset_lds + (tid + w * (length / width) * max_factor_pp) * lstride;
-            work += Assign(l_offset, idx);
-
-            switch(component)
-            {
-            case Component::REAL:
-                work += Assign(R[hr * width + w].x(), lds_real[l_offset]);
-                break;
-            case Component::IMAG:
-                work += Assign(R[hr * width + w].y(), lds_real[l_offset]);
-                break;
-            case Component::BOTH:
-                work += Assign(R[hr * width + w], lds_complex[l_offset]);
-                break;
-            }
-        }
-
-        return work;
-    }
-
     StatementList load_lds_generator(unsigned int h,
                                      unsigned int hr,
                                      unsigned int width,
@@ -497,7 +423,7 @@ struct StockhamPartialPassKernelCC : public StockhamKernelCC
 
         for(unsigned int w = 0; w < width; ++w)
         {
-            const auto tid = Parens{thread + dt + h * threads_per_transform};
+            const auto tid = Parens{thread + dt + h * threads_per_transform * max_factor_pp};
             const auto idx = offset_lds + (tid + w * (length / width) * max_factor_pp) * lstride;
             work += Assign(l_offset, idx);
 
@@ -511,73 +437,6 @@ struct StockhamPartialPassKernelCC : public StockhamKernelCC
                 break;
             case Component::BOTH:
                 work += Assign(R[hr * width + w], lds_complex[l_offset]);
-                break;
-            }
-        }
-
-        return work;
-    }
-
-    Function generate_lds_to_reg_input_pp_function()
-    {
-        std::string function_name
-            = "lds_to_reg_input_pp_length" + std::to_string(length) + "_device";
-
-        Function f{function_name};
-        f.templates = device_lds_reg_inout_templates();
-        f.arguments = device_lds_reg_inout_arguments();
-        f.qualifier = "__device__";
-
-        StatementList& body = f.body;
-        body += Declaration{
-            lstride, Ternary{Parens{stride_type == "SB_UNIT"}, Parens{1}, Parens{stride_lds}}};
-
-        body += Declaration{l_offset};
-
-        auto load_lds = std::mem_fn(&StockhamPartialPassKernelCC::load_lds_pp_generator);
-        // first pass of load (full)
-        unsigned int width  = factors[0];
-        float        height = static_cast<float>(length) / width / threads_per_transform;
-        body += SyncThreads();
-        body += add_work(std::bind(load_lds, this, _1, _2, _3, _4, _5, Component::BOTH),
-                         width,
-                         height,
-                         ThreadGuardMode::NO_GUARD);
-
-        return f;
-    }
-
-    StatementList store_lds_pp_generator(unsigned int h,
-                                         unsigned int hr,
-                                         unsigned int width,
-                                         unsigned int dt,
-                                         Expression   guard,
-                                         Component    component,
-                                         unsigned int cumheight)
-    {
-        if(hr == 0)
-            hr = h;
-        StatementList work;
-
-        for(unsigned int w = 0; w < width; ++w)
-        {
-            const auto tid = thread + dt + h * threads_per_transform;
-            const auto idx = offset_lds
-                             + (Parens{tid / (max_factor_pp * cumheight)} * (width * cumheight)
-                                + tid % (max_factor_pp * cumheight) + w * max_factor_pp * cumheight)
-                                   * lstride;
-            work += Assign(l_offset, idx);
-
-            switch(component)
-            {
-            case Component::REAL:
-                work += Assign(lds_real[l_offset], R[hr * width + w].x());
-                break;
-            case Component::IMAG:
-                work += Assign(lds_real[l_offset], R[hr * width + w].y());
-                break;
-            case Component::BOTH:
-                work += Assign(lds_complex[l_offset], R[hr * width + w]);
                 break;
             }
         }
@@ -599,7 +458,7 @@ struct StockhamPartialPassKernelCC : public StockhamKernelCC
 
         for(unsigned int w = 0; w < width; ++w)
         {
-            const auto tid = thread + dt + h * threads_per_transform;
+            const auto tid = thread + dt + h * threads_per_transform * max_factor_pp;
             const auto idx
                 = offset_lds
                   + (Parens{tid / (cumheight * max_factor_pp)} * (width * cumheight * max_factor_pp)
@@ -624,10 +483,9 @@ struct StockhamPartialPassKernelCC : public StockhamKernelCC
         return work;
     }
 
-    Function generate_lds_from_reg_output_pp_function()
+    Function generate_lds_to_reg_input_function()
     {
-        std::string function_name
-            = "lds_from_reg_output_pp_length" + std::to_string(length) + "_device";
+        std::string function_name = "lds_to_reg_input_length" + std::to_string(length) + "_device";
 
         Function f{function_name};
         f.templates = device_lds_reg_inout_templates();
@@ -640,7 +498,36 @@ struct StockhamPartialPassKernelCC : public StockhamKernelCC
 
         body += Declaration{l_offset};
 
-        auto store_lds = std::mem_fn(&StockhamPartialPassKernelCC::store_lds_pp_generator);
+        auto load_lds = std::mem_fn(&StockhamPartialPassKernelCC::load_lds_generator);
+        // first pass of load (full)
+        unsigned int width  = factors[0];
+        float        height = static_cast<float>(length) / width / threads_per_transform;
+        body += SyncThreads();
+        body += add_work(std::bind(load_lds, this, _1, _2, _3, _4, _5, Component::BOTH),
+                         width,
+                         height,
+                         ThreadGuardMode::NO_GUARD);
+
+        return f;
+    }
+
+    Function generate_lds_from_reg_output_function()
+    {
+        std::string function_name
+            = "lds_from_reg_output_length" + std::to_string(length) + "_device";
+
+        Function f{function_name};
+        f.templates = device_lds_reg_inout_templates();
+        f.arguments = device_lds_reg_inout_arguments();
+        f.qualifier = "__device__";
+
+        StatementList& body = f.body;
+        body += Declaration{
+            lstride, Ternary{Parens{stride_type == "SB_UNIT"}, Parens{1}, Parens{stride_lds}}};
+
+        body += Declaration{l_offset};
+
+        auto store_lds = std::mem_fn(&StockhamPartialPassKernelCC::store_lds_generator);
         // last pass of store (full)
         unsigned int width     = factors.back();
         float        height    = static_cast<float>(length) / width / threads_per_transform;
@@ -649,83 +536,10 @@ struct StockhamPartialPassKernelCC : public StockhamKernelCC
         body += add_work(std::bind(store_lds, this, _1, _2, _3, _4, _5, Component::BOTH, cumheight),
                          width,
                          height,
-                         ThreadGuardMode::GUARD_BY_IF);
+                         ThreadGuardMode::GUARD_BY_IF,
+                         false,
+                         max_factor_pp);
         return f;
-    }
-
-    Function generate_local_transpose_pp_function()
-    {
-        std::string function_name
-            = "local_transpose_pp_length" + std::to_string(length) + "_device";
-
-        Function f{function_name};
-        f.arguments   = ArgumentList{global_idx};
-        f.return_type = "unsigned int";
-        f.qualifier   = "__device__";
-
-        StatementList& body = f.body;
-
-        auto factor_transpose_1 = (length * length) / max_factor_pp;
-        auto factor_transpose_2 = length * max_factor_pp;
-        auto factor_transpose_3 = length * length;
-        auto factor_transpose_4 = length * length - length;
-        auto factor_transpose_5 = length * length * length;
-
-        body += Declaration{transpose_idx, global_idx % factor_transpose_5};
-        body += Assign{transpose_idx,
-                       Parens((transpose_idx % length)
-                              + Parens(Parens(transpose_idx % factor_transpose_1) / length)
-                                    * factor_transpose_1)
-                               % factor_transpose_4
-                           + (Parens(transpose_idx / factor_transpose_1) * factor_transpose_2)
-                           + Parens(transpose_idx / factor_transpose_3)
-                                 * (factor_transpose_3 - factor_transpose_1)};
-
-        body += Assign{transpose_idx,
-                       transpose_idx + global_idx / factor_transpose_5 * factor_transpose_5};
-
-        body += ReturnExpr(transpose_idx);
-
-        return f;
-    }
-
-    StatementList perform_partial_pass_step_3_4()
-    {
-        StatementList stmts;
-
-        stmts += Declaration{stride_lds_pp, Literal{1}};
-        stmts += Declaration{offset_lds_pp, thread_id * transforms_per_block_pp};
-
-        auto pre_post_lds_tmpl = device_lds_reg_inout_device_call_templates();
-        auto pre_post_lds_args = device_lds_reg_inout_pp_device_call_arguments();
-        pre_post_lds_tmpl.set_value(stride_type.name, "lds_linear ? SB_UNIT : SB_NONUNIT");
-
-        StatementList preLoad;
-        preLoad += Call{"lds_to_reg_input_pp_step_3_4_length" + std::to_string(length) + "_device",
-                        pre_post_lds_tmpl,
-                        pre_post_lds_args};
-        stmts += preLoad;
-
-        for(unsigned int npass = 0; npass < factors_pp.size(); ++npass)
-        {
-            unsigned int width  = factors_pp[npass];
-            unsigned int height = threads_per_transform / max_factor_pp;
-
-            auto butterfly = std::mem_fn(&StockhamKernel::butterfly_generator);
-            stmts += add_work(std::bind(butterfly, this, _1, _2, _3, _4, _5),
-                              width,
-                              height,
-                              ThreadGuardMode::NO_GUARD);
-        }
-
-        StatementList postStore;
-        postStore
-            += Call{"lds_from_reg_output_pp_step_3_4_length" + std::to_string(length) + "_device",
-                    pre_post_lds_tmpl,
-                    pre_post_lds_args};
-        stmts += postStore;
-
-        return stmts;
     }
 
     // The "stacked" twiddle table starts at the second factor, since
@@ -780,10 +594,7 @@ struct StockhamPartialPassKernelCC : public StockhamKernelCC
     std::vector<Expression> device_call_arguments(unsigned int call_iter) override
     {
         std::vector<Expression> args = StockhamKernel::device_call_arguments(call_iter);
-        auto which = Ternary{Parens{And{apply_large_twiddle, large_twiddle_base < 8}},
-                             Parens{large_twd_lds},
-                             Parens{large_twiddles}};
-        args.push_back(which);
+        args.push_back(large_twiddles);
         args.push_back(largeTwdBatchIsTransformCount ? batch : transform);
         args.push_back(thread_in_device_twd);
         return args;
@@ -792,7 +603,7 @@ struct StockhamPartialPassKernelCC : public StockhamKernelCC
     Function generate_device_function()
     {
         std::string function_name
-            = "forward_pp_length" + std::to_string(length) + "_" + tiling_name() + "_device";
+            = "forward_full_pass_length" + std::to_string(length) + "_" + tiling_name() + "_device";
 
         Function f{function_name};
         f.arguments = device_arguments();
@@ -842,8 +653,10 @@ struct StockhamPartialPassKernelCC : public StockhamKernelCC
                     += add_work(std::bind(load_lds, this, _1, _2, _3, _4, _5, Component::BOTH),
                                 width,
                                 height,
-                                ThreadGuardMode::GUARD_BY_IF);
-                body += If{Not{lds_is_real}, lds2reg_full};
+                                ThreadGuardMode::GUARD_BY_IF,
+                                false,
+                                max_factor_pp);
+                body += lds2reg_full;
 
                 auto apply_twiddle
                     = std::mem_fn(&StockhamPartialPassKernelCC::apply_twiddle_generator);
@@ -860,40 +673,10 @@ struct StockhamPartialPassKernelCC : public StockhamKernelCC
                              height,
                              ThreadGuardMode::NO_GUARD);
 
-            if(npass == factors.size() - 1)
-                body += large_twiddles_multiply(width, height, cumheight);
-
-            // internal lds store (half-with-linear and full-with-linear/nonlinear)
+            // internal lds store
             StatementList reg2lds_full;
-            StatementList reg2lds_half;
             if(npass < factors.size() - 1)
             {
-                // linear variant store (half) and load (half)
-                for(auto component : {Component::REAL, Component::IMAG})
-                {
-                    bool isFirstStore = (npass == 0) && (component == Component::REAL);
-                    auto half_width   = factors[npass];
-                    auto half_height
-                        = static_cast<float>(length) / half_width / threads_per_transform;
-                    // minimize sync as possible
-                    if(!isFirstStore)
-                        reg2lds_half += SyncThreads();
-                    reg2lds_half += add_work(
-                        std::bind(store_lds, this, _1, _2, _3, _4, _5, component, cumheight),
-                        half_width,
-                        half_height,
-                        ThreadGuardMode::GUARD_BY_IF);
-
-                    half_width  = factors[npass + 1];
-                    half_height = static_cast<float>(length) / half_width / threads_per_transform;
-                    reg2lds_half += SyncThreads();
-                    reg2lds_half
-                        += add_work(std::bind(load_lds, this, _1, _2, _3, _4, _5, component),
-                                    half_width,
-                                    half_height,
-                                    ThreadGuardMode::GUARD_BY_IF);
-                }
-
                 // internal full lds store (both linear/nonlinear variants)
                 if(npass == 0)
                     reg2lds_full += If{!direct_load_to_reg, {SyncThreads()}};
@@ -903,13 +686,22 @@ struct StockhamPartialPassKernelCC : public StockhamKernelCC
                     std::bind(store_lds, this, _1, _2, _3, _4, _5, Component::BOTH, cumheight),
                     width,
                     height,
-                    ThreadGuardMode::GUARD_BY_IF);
+                    ThreadGuardMode::GUARD_BY_IF,
+                    false,
+                    max_factor_pp);
 
-                body += If{Not{lds_is_real}, reg2lds_full};
-                body += Else{reg2lds_half};
+                body += reg2lds_full;
             }
         }
         return f;
+    }
+
+    ArgumentList global_arguments() override
+    {
+        // insert large twiddles
+        ArgumentList arglist = StockhamKernel::global_arguments();
+        arglist.arguments.insert(arglist.arguments.begin() + 1, large_twiddles);
+        return arglist;
     }
 
     Function generate_global_function() override
@@ -958,7 +750,7 @@ struct StockhamPartialPassKernelCC : public StockhamKernelCC
 
         body += loadlds;
 
-        body += perform_partial_pass_step_3_4();
+        body += generate_partial_pass_steps_3_4();
 
         body += LineBreak{};
         body += CommentLines{"calc the thread_in_device value once and for all device funcs"};
@@ -978,7 +770,7 @@ struct StockhamPartialPassKernelCC : public StockhamKernelCC
         auto pre_post_lds_args = device_lds_reg_inout_device_call_arguments();
         pre_post_lds_tmpl.set_value(stride_type.name, "lds_linear ? SB_UNIT : SB_NONUNIT");
         StatementList preLoad;
-        preLoad += Call{"lds_to_reg_input_pp_length" + std::to_string(length) + "_device",
+        preLoad += Call{"lds_to_reg_input_length" + std::to_string(length) + "_device",
                         pre_post_lds_tmpl,
                         pre_post_lds_args};
 
@@ -993,7 +785,7 @@ struct StockhamPartialPassKernelCC : public StockhamKernelCC
 
             templates.set_value(stride_type.name, "lds_linear ? SB_UNIT : SB_NONUNIT");
 
-            body += Call{"forward_pp_length" + std::to_string(length) + "_" + tiling_name()
+            body += Call{"forward_full_pass_length" + std::to_string(length) + "_" + tiling_name()
                              + "_device",
                          templates,
                          arguments};
@@ -1005,7 +797,7 @@ struct StockhamPartialPassKernelCC : public StockhamKernelCC
         body += LineBreak{};
         body += CommentLines{"call a post-store from registers to lds (if necessary)"};
         StatementList postStore;
-        postStore += Call{"lds_from_reg_output_pp_length" + std::to_string(length) + "_device",
+        postStore += Call{"lds_from_reg_output_length" + std::to_string(length) + "_device",
                           pre_post_lds_tmpl,
                           pre_post_lds_args};
 

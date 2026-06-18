@@ -1,13 +1,15 @@
+// Copyright (c) Advanced Micro Devices, Inc., or its affiliates.
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2024-2025, Advanced Micro Devices, Inc. All rights reserved.
-#pragma once
 
+#pragma once
 #include <sstream>
 #include <gtest/gtest.h>
 
 #include "ck_tile/core.hpp"
 #include "ck_tile/host.hpp"
 #include "ck_tile/host/kernel_launch.hpp"
+#include "ck_tile/host/permute_pk_int4.hpp"
+#include "ck_tile/host/tensor_shuffle_utils.hpp"
 #include "ck_tile/ops/epilogue.hpp"
 #include "ck_tile/ops/gemm.hpp"
 
@@ -34,20 +36,31 @@ auto calculate_rtol_atol(const ck_tile::index_t K,
 
 enum struct GemmPipelineType
 {
-    WeightPreshuffle
+    WeightPreshuffleV2,
+    WeightPreshuffleTDM
 };
 
 template <GemmPipelineType PT, typename Problem>
 struct GemmPipelineTypeSelector;
 
 template <typename Problem>
-struct GemmPipelineTypeSelector<GemmPipelineType::WeightPreshuffle, Problem>
+struct GemmPipelineTypeSelector<GemmPipelineType::WeightPreshuffleV2, Problem>
 {
-    using base_pipeline = ck_tile::BaseWeightPreshufflePipelineAGmemBGmemCRegV1<Problem>;
-    using pipeline      = ck_tile::WeightPreshufflePipelineAGmemBGmemCRegV1<Problem>;
+    using base_pipeline = ck_tile::BaseWeightPreshufflePipelineAGmemBGmemCRegV2<Problem>;
+    using pipeline      = ck_tile::WeightPreshufflePipelineAGmemBGmemCRegV2<Problem>;
 
-    static constexpr auto GetName() { return "GemmPipelineAgBgCrWeightPreshuffle"; }
+    static constexpr auto GetName() { return "GemmPipelineAgBgCrWeightPreshuffleV2"; }
 };
+
+template <typename Problem>
+struct GemmPipelineTypeSelector<GemmPipelineType::WeightPreshuffleTDM, Problem>
+{
+    using base_pipeline = ck_tile::BaseWeightPreshufflePipelineAGmemBGmemCRegTDM<Problem>;
+    using pipeline      = ck_tile::WeightPreshufflePipelineAGmemBGmemCRegTDM<Problem>;
+
+    static constexpr auto GetName() { return "GemmPipelineAgBgCrWeightPreshuffleTDM"; }
+};
+
 template <typename Datatype>
 struct config
 {
@@ -59,10 +72,52 @@ struct config
     static constexpr ck_tile::index_t N_Warp = 4;
     static constexpr ck_tile::index_t K_Warp = 1;
 
+    static constexpr ck_tile::DataCachePrefetchKind DataCachePrefetchA =
+        ck_tile::DataCachePrefetchKind::None;
+    static constexpr ck_tile::DataCachePrefetchKind DataCachePrefetchB =
+        ck_tile::DataCachePrefetchKind::None;
+};
+
+template <typename Datatype>
+struct config_mn_32x32 : public config<Datatype>
+{
     static constexpr ck_tile::index_t M_Warp_Tile = 32;
     static constexpr ck_tile::index_t N_Warp_Tile = 32;
-    static constexpr ck_tile::index_t K_Warp_Tile = sizeof(Datatype) == 2 ? 16 : 32;
+    static constexpr ck_tile::index_t K_Warp_Tile =
+        ck_tile::get_k_warp_tile<Datatype, M_Warp_Tile>();
 };
+
+template <typename Datatype>
+struct config_mn_16x16 : public config<Datatype>
+{
+    static constexpr ck_tile::index_t M_Warp_Tile = 16;
+    static constexpr ck_tile::index_t N_Warp_Tile = 16;
+    static constexpr ck_tile::index_t K_Warp_Tile =
+        ck_tile::get_k_warp_tile<Datatype, M_Warp_Tile>();
+};
+
+template <typename Datatype>
+struct config_wmma
+{
+    static constexpr ck_tile::index_t M_Tile = 128;
+    static constexpr ck_tile::index_t N_Tile = 128;
+    static constexpr ck_tile::index_t K_Tile = 128 / sizeof(Datatype);
+
+    static constexpr ck_tile::index_t M_Warp = 1;
+    static constexpr ck_tile::index_t N_Warp = 4;
+    static constexpr ck_tile::index_t K_Warp = 1;
+
+    static constexpr ck_tile::index_t M_Warp_Tile = 16;
+    static constexpr ck_tile::index_t N_Warp_Tile = 16;
+    static constexpr ck_tile::index_t K_Warp_Tile =
+        ck_tile::get_k_warp_tile<Datatype, M_Warp_Tile>();
+
+    static constexpr ck_tile::DataCachePrefetchKind DataCachePrefetchA =
+        ck_tile::DataCachePrefetchKind::None;
+    static constexpr ck_tile::DataCachePrefetchKind DataCachePrefetchB =
+        ck_tile::DataCachePrefetchKind::None;
+};
+
 template <typename Tuple>
 class TestCkTileGemmPipeline : public ::testing::Test
 {
@@ -76,37 +131,25 @@ class TestCkTileGemmPipeline : public ::testing::Test
     using CDataType                    = std::tuple_element_t<6, Tuple>;
     static constexpr auto Scheduler    = std::tuple_element_t<7, Tuple>::value;
     static constexpr auto PipelineType = std::tuple_element_t<8, Tuple>::value;
+    static constexpr bool Async =
+        ck_tile::tuple_element_or_default_t<Tuple, 9, std::false_type>::value;
 
     using DsLayout   = ck_tile::tuple<>;
     using DsDataType = ck_tile::tuple<>;
-    using GemmConfig = config<ADataType>;
 
     static constexpr bool Persistent =
-        ck_tile::tuple_element_or_default_t<Tuple, 9, std::false_type>::value;
+        ck_tile::tuple_element_or_default_t<Tuple, 10, std::false_type>::value;
     // TODO: expose tile size through test t-param ?
 
-    template <bool PadM, bool PadN, bool PadK, bool Preshuffle>
+    template <typename GemmConfig, bool PadM, bool PadN, bool PadK, bool Preshuffle>
     void invoke_gemm(const ck_tile::GemmHostArgs& args, const ck_tile::stream_config& s)
     {
-        // TODO: This should be parameterized in tests
-        // constexpr ck_tile::index_t M_Tile = 128;
-        // constexpr ck_tile::index_t N_Tile = 128;
-        // constexpr ck_tile::index_t K_Tile = 128;
-
-        // constexpr ck_tile::index_t M_Warp = 1;
-        // constexpr ck_tile::index_t N_Warp = 4;
-        // constexpr ck_tile::index_t K_Warp = 1;
-
-        // constexpr ck_tile::index_t M_Warp_Tile = 32;
-        // constexpr ck_tile::index_t N_Warp_Tile = 32;
-        // constexpr ck_tile::index_t K_Warp_Tile = sizeof(ADataType) == 2 ? 16 : 32;
-
         constexpr bool kPadM      = PadM;
         constexpr bool kPadN      = PadN;
         constexpr bool kPadK      = PadK;
         constexpr bool preshuffle = Preshuffle;
 
-        constexpr bool DoubleSmemBuffer = false;
+        constexpr bool DoubleSmemBuffer = true;
 
         // TODO: For now - but this should also be a test parameter
         constexpr bool TransposeC = false;
@@ -125,10 +168,10 @@ class TestCkTileGemmPipeline : public ::testing::Test
                               GemmConfig::K_Warp_Tile>>;
         using TilePartitioner = ck_tile::
             GemmSpatiallyLocalTilePartitioner<GemmShape, TileParitionerGroupNum, TileParitionerM01>;
-
-        using Traits = ck_tile::TileGemmTraits<kPadM, kPadN, kPadK, ALayout, BLayout, CLayout>;
         static constexpr bool StructuredSparsity = false;
         static constexpr bool NumWaveGroup       = 1;
+
+        static constexpr ck_tile::index_t VectorSize = 16;
 
         using GemmUniversalTraits = ck_tile::TileGemmUniversalTraits<kPadM,
                                                                      kPadN,
@@ -141,107 +184,68 @@ class TestCkTileGemmPipeline : public ::testing::Test
                                                                      StructuredSparsity,
                                                                      Persistent,
                                                                      NumWaveGroup,
-                                                                     preshuffle>;
+                                                                     preshuffle,
+                                                                     VectorSize,
+                                                                     GemmConfig::DataCachePrefetchA,
+                                                                     GemmConfig::DataCachePrefetchB,
+                                                                     Async>;
 
-        using GemmPipelineProblem =
-            ck_tile::GemmPipelineProblem<ADataType, BDataType, AccDataType, GemmShape, Traits>;
+        using UniversalGemmProblem = ck_tile::UniversalGemmPipelineProblem<ADataType,
+                                                                           BDataType,
+                                                                           AccDataType,
+                                                                           GemmShape,
+                                                                           GemmUniversalTraits,
+                                                                           Scheduler>;
 
-        using BaseGemmPipeline =
-            typename GemmPipelineTypeSelector<PipelineType, GemmPipelineProblem>::base_pipeline;
+        using GemmPipeline =
+            typename GemmPipelineTypeSelector<PipelineType, UniversalGemmProblem>::pipeline;
 
-        const ck_tile::index_t k_grain     = args.k_batch * GemmConfig::K_Tile;
-        const ck_tile::index_t K_split     = (args.K + k_grain - 1) / k_grain * GemmConfig::K_Tile;
-        const ck_tile::index_t num_loop    = TilePartitioner::GetLoopNum(K_split);
-        const bool has_hot_loop            = BaseGemmPipeline::BlockHasHotloop(num_loop);
-        const ck_tile::TailNumber tail_num = BaseGemmPipeline::GetBlockLoopTailNum(num_loop);
+        using GemmEpilogue = ck_tile::CShuffleEpilogue<
+            ck_tile::CShuffleEpilogueProblem<ADataType,
+                                             BDataType,
+                                             DsDataType,
+                                             AccDataType,
+                                             CDataType,
+                                             DsLayout,
+                                             CLayout,
+                                             ck_tile::element_wise::PassThrough,
+                                             TilePartitioner::MPerBlock,
+                                             TilePartitioner::NPerBlock,
+                                             GemmConfig::M_Warp,
+                                             GemmConfig::N_Warp,
+                                             GemmConfig::M_Warp_Tile,
+                                             GemmConfig::N_Warp_Tile,
+                                             GemmConfig::K_Warp_Tile,
+                                             UniversalGemmProblem::TransposeC>>;
 
-        const auto Run = [&](const auto has_hot_loop_,
-                             const auto tail_number_,
-                             const auto memory_operation_) {
-            constexpr bool has_hot_loop_v   = has_hot_loop_.value;
-            constexpr auto tail_number_v    = tail_number_.value;
-            constexpr auto memory_operation = memory_operation_.value;
+        using Kernel = ck_tile::GemmKernel<TilePartitioner, GemmPipeline, GemmEpilogue>;
+        auto kargs   = Kernel::MakeKernelArgs(args);
 
-            using UniversalGemmProblem = ck_tile::UniversalGemmPipelineProblem<ADataType,
-                                                                               BDataType,
-                                                                               AccDataType,
-                                                                               GemmShape,
-                                                                               GemmUniversalTraits,
-                                                                               Scheduler,
-                                                                               has_hot_loop_v,
-                                                                               tail_number_v>;
+        dim3 grids;
+        if constexpr(Persistent)
+        {
+            grids = Kernel::MaxOccupancyGridSize(s);
+        }
+        else
+        {
+            grids = Kernel::GridSize(args.M, args.N, args.k_batch);
+        }
+        const dim3 blocks = Kernel::BlockSize();
 
-            using GemmPipeline =
-                typename GemmPipelineTypeSelector<PipelineType, UniversalGemmProblem>::pipeline;
+        if(!Kernel::IsSupportedArgument(kargs))
+        {
+            throw std::runtime_error("Wrong! Arguments not supported! Skipping gemm!\n");
+        }
 
-            using GemmEpilogue = ck_tile::CShuffleEpilogue<
-                ck_tile::CShuffleEpilogueProblem<ADataType,
-                                                 BDataType,
-                                                 DsDataType,
-                                                 AccDataType,
-                                                 CDataType,
-                                                 DsLayout,
-                                                 CLayout,
-                                                 ck_tile::element_wise::PassThrough,
-                                                 GemmPipeline::BlockSize,
-                                                 TilePartitioner::MPerBlock,
-                                                 TilePartitioner::NPerBlock,
-                                                 GemmConfig::M_Warp,
-                                                 GemmConfig::N_Warp,
-                                                 GemmConfig::M_Warp_Tile,
-                                                 GemmConfig::N_Warp_Tile,
-                                                 GemmConfig::K_Warp_Tile,
-                                                 UniversalGemmProblem::TransposeC,
-                                                 memory_operation>>;
+        if(s.log_level_ > 0)
+        {
+            std::cout << "Launching kernel with args:" << " grid: {" << grids.x << ", " << grids.y
+                      << ", " << grids.z << "}" << ", blocks: {" << blocks.x << ", " << blocks.y
+                      << ", " << blocks.z << "}" << std::endl;
+        }
 
-            using Kernel = ck_tile::GemmKernel<TilePartitioner, GemmPipeline, GemmEpilogue>;
-            auto kargs   = Kernel::MakeKernelArgs(args);
-
-            dim3 grids;
-            if constexpr(Persistent)
-            {
-                grids = Kernel::MaxOccupancyGridSize(s);
-            }
-            else
-            {
-                grids = Kernel::GridSize(args.M, args.N, args.k_batch);
-            }
-            constexpr dim3 blocks = Kernel::BlockSize();
-
-            if(!Kernel::IsSupportedArgument(kargs))
-            {
-                throw std::runtime_error("Wrong! Arguments not supported! Skipping gemm!\n");
-            }
-
-            if(s.log_level_ > 0)
-            {
-                std::cout << "Launching kernel with args:" << " grid: {" << grids.x << ", "
-                          << grids.y << ", " << grids.z << "}" << ", blocks: {" << blocks.x << ", "
-                          << blocks.y << ", " << blocks.z << "}" << std::endl;
-            }
-
-            ck_tile::launch_kernel(
-                s, ck_tile::make_kernel<blocks.x, kBlockPerCu>(Kernel{}, grids, blocks, 0, kargs));
-        };
-
-        const auto RunSplitk = [&](const auto has_hot_loop_, const auto tail_number_) {
-            if(args.k_batch == 1)
-            {
-                Run(has_hot_loop_,
-                    tail_number_,
-                    ck_tile::integral_constant<ck_tile::memory_operation_enum,
-                                               ck_tile::memory_operation_enum::set>{});
-            }
-            else
-            {
-                Run(has_hot_loop_,
-                    tail_number_,
-                    ck_tile::integral_constant<ck_tile::memory_operation_enum,
-                                               ck_tile::memory_operation_enum::atomic_add>{});
-            }
-        };
-
-        BaseGemmPipeline::TailHandler(RunSplitk, has_hot_loop, tail_num);
+        ck_tile::ignore = ck_tile::launch_kernel(
+            s, ck_tile::make_kernel<kBlockPerCu>(Kernel{}, grids, blocks, 0, kargs));
     }
 
     public:
@@ -264,11 +268,19 @@ class TestCkTileGemmPipeline : public ::testing::Test
     {
         for(auto kb : k_batches_)
         {
-            RunSingle<PadM, PadN, PadK, Preshuffle>(M, N, K, StrideA, StrideB, StrideC, kb);
+#if CK_TILE_USE_WMMA
+            RunSingle<config_wmma<ADataType>, PadM, PadN, PadK, Preshuffle>(
+                M, N, K, StrideA, StrideB, StrideC, kb);
+#else
+            RunSingle<config_mn_16x16<ADataType>, PadM, PadN, PadK, Preshuffle>(
+                M, N, K, StrideA, StrideB, StrideC, kb);
+            RunSingle<config_mn_32x32<ADataType>, PadM, PadN, PadK, Preshuffle>(
+                M, N, K, StrideA, StrideB, StrideC, kb);
+#endif
         }
     }
 
-    template <bool PadM, bool PadN, bool PadK, bool Preshuffle>
+    template <typename GemmConfig, bool PadM, bool PadN, bool PadK, bool Preshuffle>
     void RunSingle(const int M,
                    const int N,
                    const int K,
@@ -328,19 +340,19 @@ class TestCkTileGemmPipeline : public ::testing::Test
         ck_tile::DeviceMem b_k_n_dev_buf(b_k_n.get_element_space_size_in_bytes());
         ck_tile::DeviceMem c_m_n_dev_buf(c_m_n_dev_result.get_element_space_size_in_bytes());
 
-        constexpr int divisor = GemmConfig::N_Warp_Tile == 32 ? 2 : 4;
-        ck_tile::HostTensor<BDataType> t_view({N / GemmConfig::N_Warp_Tile,
-                                               GemmConfig::N_Warp_Tile,
-                                               K / GemmConfig::K_Warp_Tile,
-                                               divisor,
-                                               GemmConfig::K_Warp_Tile / divisor});
-
-        std::copy(b_k_n.begin(), b_k_n.end(), t_view.begin());
-        ck_tile::HostTensor<BDataType> b_shuffle_host =
-            ck_tile::reference_permute(t_view, {0, 2, 3, 1, 4});
-
         a_m_k_dev_buf.ToDevice(a_m_k.data());
-        b_k_n_dev_buf.ToDevice(b_shuffle_host.data());
+        ck_tile::HostTensor<BDataType> b_shuffle_host = shuffle_b_v0<GemmConfig>(b_k_n);
+        if constexpr(std::is_same_v<BDataType, ck_tile::pk_int4_t>)
+        {
+            // Permute vector pk_i4x4 data for device implementation
+            ck_tile::HostTensor<BDataType> b_shuffle_host_dev = b_shuffle_host;
+            ck_tile::permute_vectors_i4x4_b(b_shuffle_host_dev);
+            b_k_n_dev_buf.ToDevice(b_shuffle_host_dev.data());
+        }
+        else
+        {
+            b_k_n_dev_buf.ToDevice(b_shuffle_host.data());
+        }
         c_m_n_dev_buf.SetZero();
         c_m_n_dev_result.SetZero();
 
@@ -355,7 +367,8 @@ class TestCkTileGemmPipeline : public ::testing::Test
                                    stride_B,
                                    stride_C};
 
-        invoke_gemm<PadM, PadN, PadK, Preshuffle>(args, ck_tile::stream_config{nullptr, false});
+        invoke_gemm<GemmConfig, PadM, PadN, PadK, Preshuffle>(
+            args, ck_tile::stream_config{nullptr, false});
 
         c_m_n_dev_buf.FromDevice(c_m_n_dev_result.data());
         bool pass = true;

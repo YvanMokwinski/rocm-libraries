@@ -1,215 +1,85 @@
-set(GEMM_DATATYPE "fp8;fp16" CACHE STRING "List of datatypes for GEMM (semicolon-separated)")
-set(GEMM_LAYOUT "rcr" CACHE STRING "List of layout for GEMM (semicolon-separated)")
+# Copyright (c) Advanced Micro Devices, Inc., or its affiliates.
+# SPDX-License-Identifier: MIT
 
-# Pre-generate all kernel lists to avoid blocking during parallel builds
-foreach(dt IN LISTS GEMM_DATATYPE)
-    foreach(l IN LISTS GEMM_LAYOUT)
-        set(working_path "${CMAKE_CURRENT_BINARY_DIR}/${dt}/${l}")
-        file(MAKE_DIRECTORY "${working_path}")
-
-        if (l STREQUAL "rcr")
-            set(json_blob "${CMAKE_CURRENT_LIST_DIR}/configs/default_config.json")
-        else()
-            set(json_blob "${CMAKE_CURRENT_LIST_DIR}/configs/custom_ci_config.json")
-        endif()
-
-        # Only run if files don't exist
-        if (NOT EXISTS "${working_path}/gemm_instance_blobs.txt")
-            execute_process(
-                COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_LIST_DIR}/gemm_instance_builder.py"
-                        --working_path "${working_path}"
-                        --datatype "${dt}"
-                        --layout "${l}"
-                        --config_json "${json_blob}"
-                        --list_blobs
-                RESULT_VARIABLE ret
-            )
-            if (NOT ret EQUAL 0)
-                message(FATAL_ERROR "Failed to pre-generate kernel list for ${dt} ${l}")
-            endif()
-        endif()
-    endforeach()
-endforeach()
-
-function(build_gemm_for_datatype datatype layout)
-    set(working_path "${CMAKE_CURRENT_BINARY_DIR}/${datatype}/${layout}")
-
-    if (layout STREQUAL "rcr")
-        set(json_blob "${CMAKE_CURRENT_LIST_DIR}/configs/default_config.json")
+# Budget allocation when TILE_ENGINE_SAMPLING_TIER is set
+if(NOT "${TILE_ENGINE_SAMPLING_TIER}" STREQUAL "")
+    # Map tier name to budget
+    if("${TILE_ENGINE_SAMPLING_TIER}" STREQUAL "daily")
+        set(_te_budget 8000)
+    elseif("${TILE_ENGINE_SAMPLING_TIER}" STREQUAL "weekly")
+        set(_te_budget 0)
     else()
-        set(json_blob "${CMAKE_CURRENT_LIST_DIR}/configs/custom_ci_config.json")
+        set(_te_budget ${TILE_ENGINE_SAMPLING_TIER})
     endif()
-    # Uncomment to override:
-    # set(json_blob "${CMAKE_CURRENT_LIST_DIR}/configs/user_provided_config.json")
 
-    # Read pre-generated kernel lists
-    file(STRINGS "${working_path}/gemm_instance_blobs.txt" codegen_blobs)
-    file(STRINGS "${working_path}/gemm_instance_blobs_range.txt" codegen_blobs_range)
-
-    # Generate the blobs
-    add_custom_command(
-        OUTPUT ${codegen_blobs}
-        COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_LIST_DIR}/gemm_instance_builder.py"
-                --working_path "${working_path}"
-                --datatype "${datatype}"
-                --layout "${layout}"
-                --config_json "${json_blob}"
-                --gen_blobs
-        COMMENT "Generating GEMM instance sources for ${datatype} ${layout}"
-    )
-    add_custom_target(gemm_gen_${datatype}_${layout} DEPENDS ${codegen_blobs})
-
-    # Parse ranges to identify unique trait names
-    set(unique_traits)
-    foreach(range_line IN LISTS codegen_blobs_range)
-        string(STRIP "${range_line}" stripped_line)
-        separate_arguments(split_line UNIX_COMMAND "${stripped_line}")
-        list(GET split_line 0 trait_name)
-        list(APPEND unique_traits "${trait_name}")
-    endforeach()
-    list(REMOVE_DUPLICATES unique_traits)
-
-    # Build each trait separately
-    foreach(trait IN LISTS unique_traits)
-        set(trait_files)
-        foreach(range_line IN LISTS codegen_blobs_range)
-            string(STRIP "${range_line}" stripped_line)
-            separate_arguments(split_line UNIX_COMMAND "${stripped_line}")
-            list(GET split_line 0 name)
-            if (name STREQUAL trait)
-                list(GET split_line 1 first)
-                list(GET split_line 2 last)
-                math(EXPR total_files "${last} - ${first}")
-                if (total_files GREATER 0)
-                    foreach(j RANGE ${first} ${last}-1)
-                        list(LENGTH codegen_blobs blobs_len)
-                        if (j LESS blobs_len)
-                            list(GET codegen_blobs ${j} f)
-                            list(APPEND trait_files "${f}")
-                        endif()
-                    endforeach()
-                endif()
+    if(_te_budget GREATER 0)
+        # Detect active ops from their DATATYPE variables
+        set(_active_ops "")
+        foreach(_op gemm_universal gemm_multi_d gemm_preshuffle grouped_gemm gemm_streamk batched_contraction batched_gemm gemm_multi_abd mx_gemm gemm_rowcolquant gemm_tensor_quant grouped_gemm_rowcolquant grouped_gemm_tensorquant)
+            string(TOUPPER ${_op} _OP_UPPER)
+            if(NOT "${${_OP_UPPER}_DATATYPE}" STREQUAL "")
+                list(APPEND _active_ops ${_op})
             endif()
         endforeach()
 
-        if (trait_files)
-            # Create object libraries with chunking
-            set(chunk_size 3)  # adjust as needed for memory vs parallelism
-            list(LENGTH trait_files num_files)
-            math(EXPR num_chunks "( ${num_files} + ${chunk_size} - 1 ) / ${chunk_size}")
+        if(_active_ops)
+            string(REPLACE ";" "," _active_ops_csv "${_active_ops}")
+            set(_alloc_dir "${CMAKE_CURRENT_BINARY_DIR}/sampling_alloc")
+            file(MAKE_DIRECTORY ${_alloc_dir})
 
-            set(trait_obj_libs)
-            foreach(i RANGE 0 ${num_chunks}-1)
-                math(EXPR start "${i} * ${chunk_size}")
-                math(EXPR end "${start} + ${chunk_size} - 1")
+            execute_process(
+                COMMAND ${CMAKE_COMMAND} -E env
+                    "PYTHONPATH=${CMAKE_CURRENT_LIST_DIR}/../../"
+                    ${Python3_EXECUTABLE} -m sampling.allocate_budget
+                    --total-budget ${_te_budget}
+                    --active-ops "${_active_ops_csv}"
+                    --output-dir ${_alloc_dir}
+                WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/../../
+                RESULT_VARIABLE _alloc_ret
+                OUTPUT_VARIABLE _alloc_output
+                ERROR_VARIABLE _alloc_error
+            )
+            if(NOT _alloc_ret EQUAL 0)
+                message(FATAL_ERROR "Budget allocation failed: ${_alloc_error}")
+            endif()
+            message(STATUS "Sampling budget allocation:\n${_alloc_output}")
 
-                set(chunk_files)
-                foreach(j RANGE ${start} ${end})
-                    if (j LESS ${num_files})
-                        list(GET trait_files ${j} f)
-                        list(APPEND chunk_files "${f}")
+            # Read per-op allocations (only if not already overridden)
+            foreach(_op gemm_universal gemm_multi_d gemm_preshuffle grouped_gemm gemm_streamk batched_contraction batched_gemm gemm_multi_abd mx_gemm gemm_rowcolquant gemm_tensor_quant grouped_gemm_rowcolquant grouped_gemm_tensorquant)
+                string(TOUPPER ${_op} _OP_UPPER)
+                if("${${_OP_UPPER}_MAX_INSTANCES}" STREQUAL "")
+                    if(EXISTS "${_alloc_dir}/${_op}_budget.txt")
+                        file(READ "${_alloc_dir}/${_op}_budget.txt" _budget_val)
+                        string(STRIP "${_budget_val}" _budget_val)
+                        set(${_OP_UPPER}_MAX_INSTANCES ${_budget_val})
+                        message(STATUS "  ${_op}: ${_budget_val} instances (from budget allocation)")
                     endif()
-                endforeach()
-
-                if (chunk_files)
-                    set(obj_lib_name "gemm_obj_${trait}_${i}_${datatype}_${layout}")
-                    add_library(${obj_lib_name} OBJECT ${chunk_files})
-                    add_dependencies(${obj_lib_name} gemm_gen_${datatype}_${layout})
-
-                    target_compile_options(${obj_lib_name} PRIVATE
-                        -Wno-undefined-func-template
-                        -Wno-float-equal
-                        --offload-compress
-                        -O3
-                        -fno-exceptions
-                    )
-
-                    set_target_properties(${obj_lib_name} PROPERTIES
-                        UNITY_BUILD ON
-                        UNITY_BUILD_BATCH_SIZE 2
-                    )
-
-                    list(APPEND trait_obj_libs "${obj_lib_name}")
+                else()
+                    message(STATUS "  ${_op}: ${${_OP_UPPER}_MAX_INSTANCES} instances (explicit override)")
                 endif()
             endforeach()
-
-            # Static library for this trait
-            if (trait_obj_libs)
-                set(trait_lib_name "gemm_lib_${trait}_${datatype}_${layout}")
-                set(obj_exprs)
-                foreach(objlib IN LISTS trait_obj_libs)
-                    list(APPEND obj_exprs "$<TARGET_OBJECTS:${objlib}>")
-                endforeach()
-
-                add_library(${trait_lib_name} STATIC ${obj_exprs})
-                add_dependencies(${trait_lib_name} gemm_gen_${datatype}_${layout})
-
-                # Trait-specific executable
-                set(exec_name "benchmark_gemm_${datatype}_${layout}_${trait}")
-                add_executable(${exec_name} benchmark_gemm.cpp)
-                target_link_libraries(${exec_name} PRIVATE ${trait_lib_name})
-                target_include_directories(${exec_name} PRIVATE
-                    "${CMAKE_CURRENT_LIST_DIR}"
-                    "${working_path}"
-                )
-                target_compile_definitions(${exec_name} PRIVATE
-                    GEMM_TRAIT_FILTER="${trait}"
-                )
-                target_compile_options(${exec_name} PRIVATE
-                    -Wno-undefined-func-template
-                    -Wno-float-equal
-                    --offload-compress
-                )
+            # gemm_streamk lives in a sibling subdirectory; CACHE FORCE is required for visibility
+            if("${GEMM_STREAMK_MAX_INSTANCES}" STREQUAL "")
+                if(EXISTS "${_alloc_dir}/gemm_streamk_budget.txt")
+                    file(READ "${_alloc_dir}/gemm_streamk_budget.txt" _budget_val)
+                    string(STRIP "${_budget_val}" _budget_val)
+                    set(GEMM_STREAMK_MAX_INSTANCES ${_budget_val} CACHE STRING "" FORCE)
+                    message(STATUS "  gemm_streamk: ${_budget_val} instances (from budget allocation)")
+                endif()
+            else()
+                message(STATUS "  gemm_streamk: ${GEMM_STREAMK_MAX_INSTANCES} instances (explicit override)")
             endif()
         endif()
-    endforeach()
-
-    # Master executable including all traits
-    set(all_trait_libs)
-    foreach(trait IN LISTS unique_traits)
-        if (TARGET gemm_lib_${trait}_${datatype}_${layout})
-            list(APPEND all_trait_libs "gemm_lib_${trait}_${datatype}_${layout}")
-        endif()
-    endforeach()
-
-    if (all_trait_libs)
-        add_executable(benchmark_gemm_${datatype}_${layout} benchmark_gemm.cpp)
-        target_link_libraries(benchmark_gemm_${datatype}_${layout} PRIVATE ${all_trait_libs})
-        target_include_directories(benchmark_gemm_${datatype}_${layout} PRIVATE
-            "${CMAKE_CURRENT_LIST_DIR}"
-            "${working_path}"
-        )
-        target_compile_options(benchmark_gemm_${datatype}_${layout} PRIVATE
-            -Wno-undefined-func-template
-            -Wno-float-equal
-            --offload-compress
-        )
     endif()
-endfunction()
-
-# Process each datatype/layout
-foreach(dt IN LISTS GEMM_DATATYPE)
-    foreach(l IN LISTS GEMM_LAYOUT)
-        build_gemm_for_datatype("${dt}" "${l}")
-    endforeach()
-endforeach()
-
-# Master target for parallel builds
-set(ALL_GEMM_TARGETS)
-foreach(dt IN LISTS GEMM_DATATYPE)
-    foreach(l IN LISTS GEMM_LAYOUT)
-        list(APPEND ALL_GEMM_TARGETS "benchmark_gemm_${dt}_${l}")
-    endforeach()
-endforeach()
-add_custom_target(benchmark_gemm_all DEPENDS ${ALL_GEMM_TARGETS})
-
-# Use faster linker if available
-find_program(LLD_LINKER "ld.lld")
-find_program(MOLD_LINKER "mold")
-if (MOLD_LINKER)
-    message(STATUS "Using mold linker for faster linking")
-    add_link_options(-fuse-ld=mold)
-elseif (LLD_LINKER)
-    message(STATUS "Using lld linker for faster linking")
-    add_link_options(-fuse-ld=lld)
 endif()
+
+add_subdirectory(gemm_universal EXCLUDE_FROM_ALL)
+add_subdirectory(gemm_multi_d EXCLUDE_FROM_ALL)
+add_subdirectory(gemm_preshuffle EXCLUDE_FROM_ALL)
+add_subdirectory(grouped_gemm EXCLUDE_FROM_ALL)
+add_subdirectory(gemm_multi_abd EXCLUDE_FROM_ALL)
+add_subdirectory(mx_gemm EXCLUDE_FROM_ALL)
+add_subdirectory(batched_contraction EXCLUDE_FROM_ALL)
+add_subdirectory(block_scale_gemm EXCLUDE_FROM_ALL)
+add_subdirectory(grouped_gemm_quant EXCLUDE_FROM_ALL)
+add_subdirectory(batched_gemm EXCLUDE_FROM_ALL)
