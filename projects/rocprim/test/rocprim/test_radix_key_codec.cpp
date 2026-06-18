@@ -1,6 +1,6 @@
 // MIT License
 //
-// Copyright (c) 2024-2025 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2024-2026 Advanced Micro Devices, Inc. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -57,6 +57,12 @@ std::ostream& operator<<(std::ostream& os, const extract_digit_params& params)
     sstream << "{ start: " << params.start << ", radix_bits: " << params.radix_bits
             << ", expected_result: 0x" << std::hex << params.expected_result << " }";
     return os << sstream.str();
+}
+
+inline std::ostream& operator<<(std::ostream& stream, const __hip_bfloat16& value)
+{
+    stream << static_cast<float>(value);
+    return stream;
 }
 
 class RadixKeyCodecTest : public ::testing::TestWithParam<extract_digit_params>
@@ -321,7 +327,8 @@ using TypedRadixKeyCodecTestTypes
                        TypedRadixKeyCodecTestParams<rocprim::half>,
                        TypedRadixKeyCodecTestParams<rocprim::bfloat16>,
                        TypedRadixKeyCodecTestParams<float>,
-                       TypedRadixKeyCodecTestParams<double>>;
+                       TypedRadixKeyCodecTestParams<double>,
+                       TypedRadixKeyCodecTestParams<__hip_bfloat16>>;
 
 TYPED_TEST_SUITE(TypedRadixKeyCodecTest, TypedRadixKeyCodecTestTypes);
 
@@ -339,7 +346,7 @@ void encode_then_decode_test(Key key, Decomposer decomposer)
     Key decoded_key = codec_t::decode(bit_key, decomposer);
     codec_t::decode_inplace(key, decomposer);
 
-    test_utils::assert_eq(decoded_key, key);
+    ASSERT_NO_FATAL_FAILURE(test_utils::assert_eq(decoded_key, key));
 }
 
 template<class Key, class Decomposer = ::rocprim::identity_decomposer>
@@ -367,7 +374,7 @@ void encode_then_extract_test(Key                key,
     const unsigned int inplace_bits
         = codec_t::extract_digit(key, start_bit, radix_bits, decomposer);
 
-    test_utils::assert_eq(bits, inplace_bits);
+    ASSERT_NO_FATAL_FAILURE(test_utils::assert_eq(bits, inplace_bits));
 }
 
 template<class Key, class Decomposer = ::rocprim::identity_decomposer>
@@ -398,7 +405,7 @@ void encode_then_extract_test_custom(Key                key,
     const unsigned int inplace_bits
         = codec_t::extract_digit(key, start_bit, radix_bits, decomposer);
 
-    test_utils::assert_eq(bits, inplace_bits);
+    ASSERT_NO_FATAL_FAILURE(test_utils::assert_eq(bits, inplace_bits));
 }
 
 template<class Key, class Decomposer = ::rocprim::identity_decomposer>

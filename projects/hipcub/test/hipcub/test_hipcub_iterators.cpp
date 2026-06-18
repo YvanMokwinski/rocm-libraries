@@ -24,16 +24,15 @@
 #include <stdio.h>
 #include <typeinfo>
 
-#include "hipcub/iterator/arg_index_input_iterator.hpp"
-#include "hipcub/iterator/cache_modified_input_iterator.hpp"
-#include "hipcub/iterator/cache_modified_output_iterator.hpp"
-#include "hipcub/iterator/constant_input_iterator.hpp"
-#include "hipcub/iterator/counting_input_iterator.hpp"
-#include "hipcub/iterator/transform_input_iterator.hpp"
-#include "hipcub/iterator/tex_obj_input_iterator.hpp"
-#include "hipcub/iterator/tex_ref_input_iterator.hpp"
+#include <hipcub/iterator/arg_index_input_iterator.hpp>
+#include <hipcub/iterator/cache_modified_input_iterator.hpp>
+#include <hipcub/iterator/cache_modified_output_iterator.hpp>
+#include <hipcub/iterator/constant_input_iterator.hpp>
+#include <hipcub/iterator/counting_input_iterator.hpp>
+#include <hipcub/iterator/tex_obj_input_iterator.hpp>
+#include <hipcub/iterator/transform_input_iterator.hpp>
 
-#include "hipcub/util_allocator.hpp"
+#include <hipcub/util_allocator.hpp>
 
 #include "common_test_header.hpp"
 
@@ -181,6 +180,9 @@ void iterator_test_function(IteratorType d_itr, std::vector<T> &h_reference)
     ASSERT_TRUE(d_itr == h_itrs[1]);
 
     HIP_CHECK(g_allocator.DeviceFree(device_output));
+    HIP_CHECK(hipFree(d_itrs));
+    free(h_itrs);
+
 }
 
 TYPED_TEST_SUITE(HipcubIteratorTests, HipcubIteratorTestsParams);
@@ -231,8 +233,7 @@ TYPED_TEST(HipcubIteratorTests, TestConstant)
     HIP_CHECK(hipSetDevice(device_id));
 
     using T = typename TestFixture::input_type;
-    using IteratorType = hipcub::ConstantInputIterator<T>;
-
+    using IteratorType            = rocprim::constant_iterator<T>;
     constexpr uint32_t array_size = 8;
 
     std::vector<T> h_reference(array_size);
@@ -259,8 +260,7 @@ TYPED_TEST(HipcubIteratorTests, TestCounting)
     HIP_CHECK(hipSetDevice(device_id));
 
     using T = typename TestFixture::input_type;
-    using IteratorType = hipcub::CountingInputIterator<T>;
-
+    using IteratorType            = rocprim::counting_iterator<T>;
     constexpr uint32_t array_size = 8;
 
     std::vector<T> h_reference(array_size);
@@ -292,8 +292,7 @@ TYPED_TEST(HipcubIteratorTests, TestTransform)
 
     using T = typename TestFixture::input_type;
     using CastT = typename TestFixture::input_type;
-    using IteratorType = hipcub::TransformInputIterator<T, TransformOp<T>, CastT*>;
-
+    using IteratorType        = rocprim::transform_iterator<CastT*, TransformOp<T>, T>;
     constexpr int TEST_VALUES = 11000;
 
     std::vector<T> h_data(TEST_VALUES);
@@ -343,9 +342,11 @@ TYPED_TEST(HipcubIteratorTests, TestTexObj)
     hipDeviceProp_t props;
     HIP_CHECK(hipGetDeviceProperties(&props, device_id));
     std::string deviceName = std::string(props.gcnArchName);
-    if (deviceName.rfind("gfx94", 0) == 0 || deviceName.rfind("gfx120") == 0 || deviceName.rfind("gfx95") == 0) {
-        // This is a gfx94x or gfx120x device, so skip this test
-        GTEST_SKIP() << "Test not run on gfx94x, gfx120x or gfx95x as texture cache API is not supported";
+    if(deviceName.rfind("gfx94", 0) == 0 || deviceName.rfind("gfx120", 0) == 0
+       || deviceName.rfind("gfx95", 0) == 0 || deviceName.rfind("gfx1250") == 0)
+    {
+        // This is a gfx94x gfx120x, or gfx1250 device, so skip this test
+        GTEST_SKIP() << "Test not run on gfx94x, gfx95x, gfx120x, or gfx1250 as texture cache API is not supported";
     }
 
     HIP_CHECK(hipSetDevice(device_id));
@@ -404,6 +405,9 @@ TYPED_TEST(HipcubIteratorTests, TestTexObj)
 
         iterator_test_function<IteratorType, T>(d_obj_itr, h_reference);
 
+        HIP_CHECK(d_obj_itr.UnbindTexture());
+        HIP_CHECK(d_obj_itr2.UnbindTexture());
+
         HIP_CHECK(g_allocator.DeviceFree(d_data));
         HIP_CHECK(g_allocator.DeviceFree(d_dummy));
     }
@@ -417,16 +421,18 @@ TYPED_TEST(HipcubIteratorTests, TestTexRef)
     hipDeviceProp_t props;
     HIP_CHECK(hipGetDeviceProperties(&props, device_id));
     std::string deviceName = std::string(props.gcnArchName);
-    if (deviceName.rfind("gfx94", 0) == 0 || deviceName.rfind("gfx120") == 0 || deviceName.rfind("gfx95") == 0){
-        // This is a gfx94x or gfx120x device, so skip this test
-        GTEST_SKIP() << "Test not run on gfx94x, gfx120x or gfx95x as texture cache API is not supported";
+    if(deviceName.rfind("gfx94", 0) == 0 || deviceName.rfind("gfx120", 0) == 0
+       || deviceName.rfind("gfx95", 0) == 0 || deviceName.rfind("gfx1250") == 0)
+    {
+        // This is a gfx94x gfx120x, or gfx1250 device, so skip this test
+        GTEST_SKIP() << "Test not run on gfx94x, gfx95x, gfx120x, or gfx1250 as texture cache API is not supported";
     }
 
     HIP_CHECK(hipSetDevice(device_id));
 
     using T            = typename TestFixture::input_type;
     using CastT        = typename TestFixture::input_type;
-    using IteratorType = hipcub::TexRefInputIterator<T, __LINE__>;
+    using IteratorType = hipcub::TexObjInputIterator<T, std::ptrdiff_t>;
 
     //
     // Test iterator manipulation in kernel
@@ -478,6 +484,9 @@ TYPED_TEST(HipcubIteratorTests, TestTexRef)
 
         iterator_test_function<IteratorType, T>(d_ref_itr, h_reference);
 
+        HIP_CHECK(d_ref_itr.UnbindTexture());
+        HIP_CHECK(d_ref_itr2.UnbindTexture());
+
         HIP_CHECK(g_allocator.DeviceFree(d_data));
         HIP_CHECK(g_allocator.DeviceFree(d_dummy));
     }
@@ -491,15 +500,17 @@ TYPED_TEST(HipcubIteratorTests, TestTexTransform)
     hipDeviceProp_t props;
     HIP_CHECK(hipGetDeviceProperties(&props, device_id));
     std::string deviceName = std::string(props.gcnArchName);
-    if (deviceName.rfind("gfx94", 0) == 0 || deviceName.rfind("gfx120") == 0 || deviceName.rfind("gfx95") == 0) {
-        // This is a gfx94x or gfx120x device, so skip this test
-        GTEST_SKIP() << "Test not run on gfx94x, gfx120x or gfx95x as texture cache API is not supported";
+    if(deviceName.rfind("gfx94", 0) == 0 || deviceName.rfind("gfx120", 0) == 0
+       || deviceName.rfind("gfx95", 0) == 0 || deviceName.rfind("gfx1250") == 0)
+    {
+        // This is a gfx94x gfx120x, or gfx1250 device, so skip this test
+        GTEST_SKIP() << "Test not run on gfx94x, gfx95x, gfx120x, or gfx1250 as texture cache API is not supported";
     }
 
     HIP_CHECK(hipSetDevice(device_id));
 
     using T                   = typename TestFixture::input_type;
-    using TextureIteratorType = hipcub::TexRefInputIterator<T, __LINE__>;
+    using TextureIteratorType = hipcub::TexObjInputIterator<T, std::ptrdiff_t>;
 
     constexpr uint32_t TEST_VALUES = 11000;
 
@@ -535,13 +546,11 @@ TYPED_TEST(HipcubIteratorTests, TestTexTransform)
         HIP_CHECK(d_tex_itr.BindTexture(d_data, sizeof(T) * TEST_VALUES));
 
         // Create transform iterator
-        hipcub::TransformInputIterator<T, TransformOp<T>, TextureIteratorType> xform_itr(d_tex_itr,
-                                                                                         op);
+        rocprim::transform_iterator<TextureIteratorType, TransformOp<T>, T> xform_itr(d_tex_itr,
+                                                                                      op);
 
-        iterator_test_function<
-            hipcub::TransformInputIterator<T, TransformOp<T>, TextureIteratorType>,
-            T>(xform_itr, h_reference);
-
+        iterator_test_function<rocprim::transform_iterator<TextureIteratorType, TransformOp<T>, T>,
+                               T>(xform_itr, h_reference);
         HIP_CHECK(g_allocator.DeviceFree(d_data));
     }
 }

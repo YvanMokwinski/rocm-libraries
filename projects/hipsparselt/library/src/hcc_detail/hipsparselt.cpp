@@ -2,7 +2,7 @@
  *
  * MIT License
  *
- * Copyright (c) 2022-2024 Advanced Micro Devices, Inc.
+ * Copyright (c) 2022-2026 Advanced Micro Devices, Inc.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -24,6 +24,7 @@
  *
  *******************************************************************************/
 
+#include "Debug.hpp"
 #include "exceptions.hpp"
 #include "hipsparselt_ostream.hpp"
 #include "utility.hpp"
@@ -32,7 +33,6 @@
 #include <rocsparselt.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include "Debug.hpp"
 
 #define TO_STR2(x) #x
 #define TO_STR(x) TO_STR2(x)
@@ -196,7 +196,6 @@ rocsparselt_matmul_descr_attribute_
         throw HIPSPARSE_STATUS_NOT_SUPPORTED;
     }
 }
-
 
 rocsparselt_mat_descr_attribute_
     HIPMatDescAttributeToRocSparseLtMatDescAttribute(hipsparseLtMatDescAttribute_t attr)
@@ -521,6 +520,20 @@ catch(...)
     return exception_to_hipsparselt_status();
 }
 
+hipsparseStatus_t hipsparseLtMatmulAlgSelectionDestroy(const hipsparseLtMatmulAlgSelection_t* algSelection)
+try
+{
+    rocsparselt::Debug::Instance().markerStart("hipsparseLtMatmulAlgSelectionDestroy");
+    auto status = RocSparseLtStatusToHIPStatus(
+        rocsparselt_matmul_alg_selection_destroy((const rocsparselt_matmul_alg_selection*)algSelection));
+    rocsparselt::Debug::Instance().markerStop();
+    return status;
+}
+catch(...)
+{
+    return exception_to_hipsparselt_status();
+}
+
 hipsparseStatus_t hipsparseLtMatmulAlgSetAttribute(const hipsparseLtHandle_t*       handle,
                                                    hipsparseLtMatmulAlgSelection_t* algSelection,
                                                    hipsparseLtMatmulAlgAttribute_t  attribute,
@@ -632,17 +645,18 @@ hipsparseStatus_t hipsparseLtMatmul(const hipsparseLtHandle_t*     handle,
 try
 {
     rocsparselt::Debug::Instance().markerStart("hipsparseLtMatmul");
-    auto status = RocSparseLtStatusToHIPStatus(rocsparselt_matmul((const rocsparselt_handle*)handle,
-                                                           (const rocsparselt_matmul_plan*)plan,
-                                                           alpha,
-                                                           d_A,
-                                                           d_B,
-                                                           beta,
-                                                           d_C,
-                                                           d_D,
-                                                           workspace,
-                                                           streams,
-                                                           numStreams));
+    auto status
+        = RocSparseLtStatusToHIPStatus(rocsparselt_matmul((const rocsparselt_handle*)handle,
+                                                          (const rocsparselt_matmul_plan*)plan,
+                                                          alpha,
+                                                          d_A,
+                                                          d_B,
+                                                          beta,
+                                                          d_C,
+                                                          d_D,
+                                                          workspace,
+                                                          streams,
+                                                          numStreams));
     rocsparselt::Debug::Instance().markerStop();
     return status;
 }
@@ -665,17 +679,18 @@ hipsparseStatus_t hipsparseLtMatmulSearch(const hipsparseLtHandle_t* handle,
 try
 {
     rocsparselt::Debug::Instance().markerStart("hipsparseLtMatmulSearch");
-    auto status = RocSparseLtStatusToHIPStatus(rocsparselt_matmul_search((const rocsparselt_handle*)handle,
-                                                                  (rocsparselt_matmul_plan*)plan,
-                                                                  alpha,
-                                                                  d_A,
-                                                                  d_B,
-                                                                  beta,
-                                                                  d_C,
-                                                                  d_D,
-                                                                  workspace,
-                                                                  streams,
-                                                                  numStreams));
+    auto status
+        = RocSparseLtStatusToHIPStatus(rocsparselt_matmul_search((const rocsparselt_handle*)handle,
+                                                                 (rocsparselt_matmul_plan*)plan,
+                                                                 alpha,
+                                                                 d_A,
+                                                                 d_B,
+                                                                 beta,
+                                                                 d_C,
+                                                                 d_D,
+                                                                 workspace,
+                                                                 streams,
+                                                                 numStreams));
     rocsparselt::Debug::Instance().markerStop();
     return status;
 }
@@ -887,6 +902,8 @@ void hipsparseLtInitialize()
 hipsparseStatus_t hipsparseLtGetVersion(const hipsparseLtHandle_t* handle, int* version)
 try
 {
+    if(version == nullptr)
+        return HIPSPARSE_STATUS_INVALID_VALUE;
     *version = hipsparseltVersionMajor * 100000 + hipsparseltVersionMinor * 100
                + hipsparseltVersionPatch;
 
@@ -900,6 +917,9 @@ catch(...)
 hipsparseStatus_t hipsparseLtGetProperty(hipLibraryPropertyType propertyType, int* value)
 try
 {
+    if(value == nullptr)
+        return HIPSPARSE_STATUS_INVALID_VALUE;
+
     switch(propertyType)
     {
     case HIP_LIBRARY_MAJOR_VERSION:
@@ -942,10 +962,13 @@ catch(...)
 hipsparseStatus_t hipsparseLtGetArchName(char** archName)
 try
 {
+    if(archName == nullptr)
+        return HIPSPARSE_STATUS_INVALID_VALUE;
+
     *archName = nullptr;
     auto arch = rocsparselt_internal_get_arch_name();
-    *archName = (char*)malloc(arch.size() * sizeof(char));
-    strncpy(*archName, arch.c_str(), arch.size());
+    *archName = (char*)malloc((arch.size() + 1) * sizeof(char));
+    strcpy(*archName, arch.c_str());
     return HIPSPARSE_STATUS_SUCCESS;
 }
 catch(...)

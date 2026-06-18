@@ -80,6 +80,7 @@ using RocprimDeviceSelectTestsParams
                        DeviceSelectParams<rocprim::half, rocprim::half>,
                        DeviceSelectParams<rocprim::bfloat16, rocprim::bfloat16>,
                        DeviceSelectParams<float, float>,
+                       DeviceSelectParams<short, char, rocprim::int128_t>,
                        DeviceSelectParams<unsigned char, float, int, true>,
                        DeviceSelectParams<double, double, int, true>,
                        DeviceSelectParams<common::custom_type<double, double, true>,
@@ -1251,6 +1252,9 @@ INSTANTIATE_TEST_SUITE_P(
 
 TEST_P(RocprimDeviceSelectLargeInputTests, LargeInputFlagged)
 {
+    GTEST_SKIP_ASAN();
+    GTEST_SKIP_VALGRIND();
+
     int device_id = test_common_utils::obtain_device_from_ctest();
     SCOPED_TRACE(testing::Message() << "with device_id = " << device_id);
     HIP_CHECK(hipSetDevice(device_id));
@@ -1379,6 +1383,9 @@ struct large_select_op
 
 TEST_P(RocprimDeviceSelectLargeInputTests, LargeInputSelectOp)
 {
+    GTEST_SKIP_ASAN();
+    GTEST_SKIP_VALGRIND();
+
     int device_id = test_common_utils::obtain_device_from_ctest();
     SCOPED_TRACE(testing::Message() << "with device_id = " << device_id);
     HIP_CHECK(hipSetDevice(device_id));
@@ -1486,6 +1493,9 @@ TEST_P(RocprimDeviceSelectLargeInputTests, LargeInputSelectOp)
 
 TEST_P(RocprimDeviceSelectLargeInputTests, LargeInputSelectFlagged)
 {
+    GTEST_SKIP_ASAN();
+    GTEST_SKIP_VALGRIND();
+
     int device_id = test_common_utils::obtain_device_from_ctest();
     SCOPED_TRACE(testing::Message() << "with device_id = " << device_id);
     HIP_CHECK(hipSetDevice(device_id));
@@ -1599,6 +1609,9 @@ TEST_P(RocprimDeviceSelectLargeInputTests, LargeInputSelectFlagged)
 
 TEST_P(RocprimDeviceSelectLargeInputTests, LargeInputUnique)
 {
+    GTEST_SKIP_ASAN();
+    GTEST_SKIP_VALGRIND();
+
     static constexpr bool debug_synchronous = false;
 
     auto               param          = GetParam();

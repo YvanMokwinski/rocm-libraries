@@ -1,28 +1,5 @@
-/*******************************************************************************
- *
- * MIT License
- *
- * Copyright 2024-2025 AMD ROCm(TM) Software
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- *
- *******************************************************************************/
+// Copyright Advanced Micro Devices, Inc., or its affiliates.
+// SPDX-License-Identifier: MIT
 
 #include <rocRoller/Scheduling/RandomScheduler.hpp>
 #include <rocRoller/Utilities/Random.hpp>
@@ -31,20 +8,19 @@ namespace rocRoller
 {
     namespace Scheduling
     {
-        RegisterComponent(RandomScheduler);
         static_assert(Component::Component<RandomScheduler>);
 
-        inline RandomScheduler::RandomScheduler(ContextPtr ctx)
+        RandomScheduler::RandomScheduler(ContextPtr ctx)
             : Scheduler{ctx}
         {
         }
 
-        inline bool RandomScheduler::Match(Argument arg)
+        bool RandomScheduler::Match(Argument arg)
         {
             return std::get<0>(arg) == SchedulerProcedure::Random;
         }
 
-        inline std::shared_ptr<Scheduler> RandomScheduler::Build(Argument arg)
+        std::shared_ptr<Scheduler> RandomScheduler::Build(Argument arg)
         {
             if(!Match(arg))
                 return nullptr;
@@ -52,7 +28,7 @@ namespace rocRoller
             return std::make_shared<RandomScheduler>(std::get<2>(arg));
         }
 
-        inline std::string RandomScheduler::name() const
+        std::string RandomScheduler::name() const
         {
             return Name;
         }
@@ -62,7 +38,7 @@ namespace rocRoller
             return true;
         }
 
-        inline Generator<Instruction>
+        Generator<Instruction>
             RandomScheduler::operator()(std::vector<Generator<Instruction>>& seqs)
         {
             if(seqs.empty())

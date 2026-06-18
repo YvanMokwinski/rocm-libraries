@@ -1,6 +1,6 @@
 // MIT License
 //
-// Copyright (c) 2017-2025 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Advanced Micro Devices, Inc. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -23,9 +23,9 @@
 #include "common_test_header.hpp"
 
 // hipcub API
-#include "hipcub/device/device_select.hpp"
-#include "hipcub/iterator/counting_input_iterator.hpp"
-#include "hipcub/iterator/discard_output_iterator.hpp"
+#include <hipcub/device/device_select.hpp>
+#include <hipcub/iterator/counting_input_iterator.hpp>
+#include <hipcub/iterator/discard_output_iterator.hpp>
 
 #include "single_index_iterator.hpp"
 #include "test_utils_bfloat16.hpp"
@@ -244,9 +244,8 @@ TEST(HipcubDeviceSelectTests, FlagNormalization)
     for(size_t size : test_utils::get_sizes(seed_value))
     {
         SCOPED_TRACE(testing::Message() << "with size= " << size);
-
-        hipcub::CountingInputIterator<T> d_input(0);
-        hipcub::CountingInputIterator<F> d_flags(1);
+        rocprim::counting_iterator<T>    d_input(0);
+        rocprim::counting_iterator<F>    d_flags(1);
         U*                               d_output;
         unsigned int*                    d_selected_count_output;
 
@@ -808,9 +807,8 @@ TEST(HipcubDeviceSelectTests, UniqueDiscardOutputIterator)
     for(size_t size : test_utils::get_sizes(seed_value))
     {
         SCOPED_TRACE(testing::Message() << "with size= " << size);
-
-        hipcub::CountingInputIterator<unsigned int> d_input(0);
-        hipcub::DiscardOutputIterator<>             d_output;
+        rocprim::counting_iterator<unsigned int>    d_input(0);
+        rocprim::discard_iterator                   d_output;
         size_t*                                     d_selected_count_output;
 
         HIP_CHECK(test_common_utils::hipMallocHelper((&d_selected_count_output), sizeof(size_t)));
@@ -880,6 +878,7 @@ INSTANTIATE_TEST_SUITE_P(HipcubDeviceSelectLargeIndicesTest,
 
 TEST_P(HipcubDeviceSelectLargeIndicesTests, LargeIndicesSelectOp)
 {
+    GTEST_SKIP_ASAN();
     int device_id = test_common_utils::obtain_device_from_ctest();
     SCOPED_TRACE(testing::Message() << "with device_id= " << device_id);
     HIP_CHECK(hipSetDevice(device_id));
@@ -903,7 +902,7 @@ TEST_P(HipcubDeviceSelectLargeIndicesTests, LargeIndicesSelectOp)
 #endif
 
         // Generate data
-        hipcub::CountingInputIterator<T> d_input(0);
+        rocprim::counting_iterator<T>    d_input(0);
         U*                               d_output;
         selected_count_type*             d_selected_count_output;
         selected_count_type              expected_output_size = selected_size;
@@ -1218,6 +1217,8 @@ TYPED_TEST(HipcubDeviceUniqueByKeyTests, UniqueByKey)
 
 TEST(HipcubDeviceUniqueByKeyTests, LargeIndicesUniqueByKey)
 {
+    GTEST_SKIP_ASAN();
+
     int device_id = test_common_utils::obtain_device_from_ctest();
     SCOPED_TRACE(testing::Message() << "with device_id= " << device_id);
     HIP_CHECK(hipSetDevice(device_id));
@@ -1243,10 +1244,8 @@ TEST(HipcubDeviceUniqueByKeyTests, LargeIndicesUniqueByKey)
                 = (size + TestUniqueEqualityOp::segment - 1) / TestUniqueEqualityOp::segment;
             const size_t output_index = selected_count - 1;
             const size_t input_index  = output_index * TestUniqueEqualityOp::segment;
-
-            hipcub::CountingInputIterator<key_type>   d_keys_input(0);
-            hipcub::CountingInputIterator<value_type> d_values_input(123);
-
+            rocprim::counting_iterator<key_type>   d_keys_input(0);
+            rocprim::counting_iterator<value_type> d_values_input(123);
             key_type*   d_keys_output;
             value_type* d_values_output;
             HIP_CHECK(test_common_utils::hipMallocHelper(&d_keys_output, sizeof(*d_keys_output)));

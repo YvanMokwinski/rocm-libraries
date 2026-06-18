@@ -23,11 +23,11 @@
 #include "common_test_header.hpp"
 
 // hipcub API
-#include "hipcub/block/block_load.hpp"
-#include "hipcub/block/block_radix_sort.hpp"
-#include "hipcub/block/block_store.hpp"
 #include "test_utils_custom_test_types.hpp"
 #include "test_utils_sort_comparator.hpp"
+#include <hipcub/block/block_load.hpp>
+#include <hipcub/block/block_radix_sort.hpp>
+#include <hipcub/block/block_store.hpp>
 
 #include <cstdint>
 
@@ -478,6 +478,7 @@ TYPED_TEST(HipcubBlockRadixSort, SortKeys)
         // Running kernel
         sort_key_kernel<block_size, items_per_thread, to_striped, descending>
             <<<dim3(grid_size), dim3(block_size), 0, 0>>>(device_keys_output, start_bit, end_bit);
+        HIP_CHECK(hipGetLastError());
 
         // Getting results to host
         HIP_CHECK(hipMemcpy(keys_output.data(),
@@ -636,6 +637,7 @@ TYPED_TEST(HipcubBlockRadixSort, SortKeysValues)
                                                           device_values_output,
                                                           start_bit,
                                                           end_bit);
+        HIP_CHECK(hipGetLastError());
 
         // Getting results to host
         HIP_CHECK(hipMemcpy(keys_output.data(),

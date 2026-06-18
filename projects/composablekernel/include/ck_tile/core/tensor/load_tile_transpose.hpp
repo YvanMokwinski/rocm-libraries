@@ -1,5 +1,5 @@
+// Copyright (c) Advanced Micro Devices, Inc., or its affiliates.
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2018-2025, Advanced Micro Devices, Inc. All rights reserved.
 
 #pragma once
 
@@ -50,61 +50,154 @@ constexpr bool is_sequence_suffix_v = is_sequence_suffix<Suffix, Sequence>::valu
 template <typename DataType>
 struct DefaultTranspose
 {
-    template <index_t LaneGroupSize>
-    struct Quad16
+#if defined(__gfx950__)
+    template <index_t LaneGroupSize, index_t NumBitType>
+    struct Quad
     {
         static_assert(LaneGroupSize == 64 || LaneGroupSize == 32 || LaneGroupSize == 16,
                       "LaneGroupSize must be 64, 32, or 16");
-        using InputEncoding =
-            tile_distribution_encoding<sequence<>,
-                                       tuple<sequence<4>, sequence<LaneGroupSize / 16, 4, 4>>,
-                                       tuple<sequence<2, 1, 2>>,
-                                       tuple<sequence<0, 0, 1>>,
-                                       sequence<2>,
-                                       sequence<2>>;
 
-        using OutputEncoding =
-            tile_distribution_encoding<sequence<>,
-                                       tuple<sequence<LaneGroupSize>, sequence<4>>,
-                                       tuple<sequence<1>>,
-                                       tuple<sequence<0>>,
-                                       sequence<2>,
-                                       sequence<0>>;
+        // The tile is defined by the LaneGroupSize, which defines the number of lanes in the M/N
+        // dimensions for the MMA instruction defined by warp gemm.
+        // The LaneGroupSize is subdivided into groups of 16 (finer granularity of MMA
+        // instructions), we define these as major subtiles. Each of these major subtile is divided
+        // into minor subtiles which group the lanes exchanging data during the transpose Example
+        // LaneGroupSize = 16, 16 bit type:
+        //  - There is 1 group of 16 lanes (1 major subtile)
+        //  - Each major subtile is divided into 4 minor subtiles of (4x4) -> 4 lanes transpose
+        //    the minor subtile and each lane holds 4 elements
+
+        // all load transpose instructions use 64 bit right now
+        static constexpr index_t InstructionBits = 64;
+        // Subtile major dimension is fixed
+        static constexpr index_t SubtileMajorDimension = 16;
+        // Number of subtile major
+        static constexpr index_t NumSubtilesMajor = LaneGroupSize / 16;
+        // number of elements loaded by each lane with single instruction, but also number
+        // of consecutive lanes in a subtile. Subtile is squared (NLanes x NElementsPerLane)
+        static constexpr index_t SubtileMinorDimension = InstructionBits / NumBitType;
+        // Number of subtiles minor inside each subtile major
+        static constexpr index_t NumSubtilesMinor = 16 / SubtileMinorDimension;
+
+        using InputEncoding = tile_distribution_encoding<
+            sequence<>,
+            tuple<sequence<SubtileMinorDimension>,
+                  sequence<NumSubtilesMajor, NumSubtilesMinor, SubtileMinorDimension>>,
+            tuple<sequence<2, 1, 2>>,
+            tuple<sequence<0, 0, 1>>,
+            sequence<2>,
+            sequence<2>>;
+
+        using OutputEncoding = tile_distribution_encoding<
+            sequence<>,
+            tuple<sequence<LaneGroupSize>, sequence<SubtileMinorDimension>>,
+            tuple<sequence<1>>,
+            tuple<sequence<0>>,
+            sequence<2>,
+            sequence<0>>;
     };
 
-    template <index_t LaneGroupSize>
-    struct Quad8
-    {
-        static_assert(LaneGroupSize == 64 || LaneGroupSize == 32 || LaneGroupSize == 16,
-                      "LaneGroupSize must be 64, 32, or 16");
-        using InputEncoding =
-            tile_distribution_encoding<sequence<>,
-                                       tuple<sequence<8>, sequence<LaneGroupSize / 16, 2, 8>>,
-                                       tuple<sequence<2, 1, 2>>,
-                                       tuple<sequence<0, 0, 1>>,
-                                       sequence<2>,
-                                       sequence<2>>;
-
-        using OutputEncoding =
-            tile_distribution_encoding<sequence<>,
-                                       tuple<sequence<LaneGroupSize>, sequence<8>>,
-                                       tuple<sequence<1>>,
-                                       tuple<sequence<0>>,
-                                       sequence<2>,
-                                       sequence<0>>;
-    };
+    static constexpr index_t PackedSize      = numeric_traits<remove_cvref_t<DataType>>::PackedSize;
+    static constexpr index_t NumBitsDataType = (sizeof(DataType) * 8) / PackedSize;
 
     // Select based on data size
     template <index_t LaneGroupSize>
-    using QuadInputEncoding = std::conditional_t<sizeof(DataType) == 2,
-                                                 typename Quad16<LaneGroupSize>::InputEncoding,
-                                                 typename Quad8<LaneGroupSize>::InputEncoding>;
+    using QuadInputEncoding = typename Quad<LaneGroupSize, NumBitsDataType>::InputEncoding;
 
     template <index_t LaneGroupSize>
-    using QuadOutputEncoding = std::conditional_t<sizeof(DataType) == 2,
-                                                  typename Quad16<LaneGroupSize>::OutputEncoding,
-                                                  typename Quad8<LaneGroupSize>::OutputEncoding>;
+    using QuadOutputEncoding = typename Quad<LaneGroupSize, NumBitsDataType>::OutputEncoding;
+#else // now this branch just for gfx1250
+    template <index_t LaneGroupSize, index_t NumBitType>
+    struct Quad
+    {
+        static_assert(LaneGroupSize == 16 || LaneGroupSize == 32 || LaneGroupSize == 64,
+                      "LaneGroupSize must be 16, 32, or 64");
 
+        // gfx1250 load transpose instructions use 128 bits for 16-bit types, 64 bits for 8-bit
+        static constexpr index_t InstructionBits = (NumBitType >= 16) ? 128 : 64;
+        // Subtile major dimension is fixed
+        static constexpr index_t SubtileMajorDimension = 16;
+        // Number of subtile major
+        static constexpr index_t NumSubtilesMajor = LaneGroupSize / 16;
+        // number of elements loaded by each lane with single instruction, but also number
+        // of consecutive lanes in a subtile. Subtile is squared (NLanes x NElementsPerLane)
+        static constexpr index_t SubtileMinorDimension = InstructionBits / NumBitType;
+        // Number of subtiles minor inside each subtile major
+        static constexpr index_t NumSubtilesMinor = 16 / SubtileMinorDimension;
+
+        static constexpr auto make_input_encoding()
+        {
+            if constexpr(NumBitType >= 16)
+            {
+                return tile_distribution_encoding<
+                    sequence<>,
+                    tuple<sequence<SubtileMinorDimension>,
+                          sequence<NumSubtilesMajor, NumSubtilesMinor, SubtileMinorDimension>>,
+                    tuple<sequence<2, 2, 1>>,
+                    tuple<sequence<0, 1, 0>>,
+                    sequence<2>,
+                    sequence<2>>{};
+            }
+            else if constexpr(NumBitType == 8)
+            {
+                return tile_distribution_encoding<
+                    sequence<>,
+                    tuple<sequence<NumSubtilesMinor, SubtileMinorDimension / NumSubtilesMinor>,
+                          sequence<NumSubtilesMajor, NumSubtilesMinor, SubtileMinorDimension>>,
+                    tuple<sequence<2, 1, 2, 1>>,
+                    tuple<sequence<0, 0, 1, 1>>,
+                    sequence<2>,
+                    sequence<2>>{};
+            }
+            else
+            {
+                return tile_distribution_encoding<
+                    sequence<>,
+                    tuple<sequence<2, NumSubtilesMajor, 2, 8>, sequence<16>>,
+                    tuple<sequence<1, 1, 1>>,
+                    tuple<sequence<2, 0, 3>>,
+                    sequence<1, 2>,
+                    sequence<1, 0>>{};
+            }
+        }
+        using InputEncoding = decltype(make_input_encoding());
+
+        static constexpr auto make_output_encoding()
+        {
+            if constexpr(NumBitType >= 8)
+            {
+                return tile_distribution_encoding<
+                    sequence<>,
+                    tuple<sequence<LaneGroupSize>, sequence<SubtileMinorDimension>>,
+                    tuple<sequence<1>>,
+                    tuple<sequence<0>>,
+                    sequence<2>,
+                    sequence<0>>{};
+            }
+            else
+            {
+                return tile_distribution_encoding<
+                    sequence<>,
+                    tuple<sequence<16>, sequence<2, NumSubtilesMajor, 16>>,
+                    tuple<sequence<2, 1>>,
+                    tuple<sequence<0, 0>>,
+                    sequence<2, 2>,
+                    sequence<1, 2>>{};
+            }
+        }
+        using OutputEncoding = decltype(make_output_encoding());
+    };
+
+    static constexpr index_t PackedSize      = numeric_traits<remove_cvref_t<DataType>>::PackedSize;
+    static constexpr index_t NumBitsDataType = (sizeof(DataType) * 8) / PackedSize;
+
+    // Select based on data size
+    template <index_t LaneGroupSize>
+    using QuadInputEncoding = typename Quad<LaneGroupSize, NumBitsDataType>::InputEncoding;
+
+    template <index_t LaneGroupSize>
+    using QuadOutputEncoding = typename Quad<LaneGroupSize, NumBitsDataType>::OutputEncoding;
+#endif
     // Always swap last two dimensions
     static constexpr auto transpose_dims = sequence<1, 0>{};
 
@@ -131,7 +224,7 @@ struct DefaultTranspose
         static constexpr bool suffix_valid_dim1 =
             util::is_sequence_suffix_v<decltype(quad_hs[I1]), decltype(input_hs[I1])>;
 
-        // 3. PS→RHS mapping constraints
+        // 3. PS->RHS mapping constraints
         static constexpr auto input_ps_major = InDstrEncode::ps_to_rhss_major_;
         static constexpr auto input_ps_minor = InDstrEncode::ps_to_rhss_minor_;
 
@@ -156,14 +249,12 @@ struct DefaultTranspose
             util::is_sequence_suffix_v<decltype(shifted_quad_ps_minor0),
                                        decltype(input_ps_minor_last)>;
 
-        // 4. YS→RHS mapping constraints
+        // 4. YS->RHS mapping constraints
         static constexpr auto input_ys_major = InDstrEncode::ys_to_rhs_major_;
         static constexpr auto input_ys_minor = InDstrEncode::ys_to_rhs_minor_;
         static constexpr auto quad_ys_major  = QuadEncoding::ys_to_rhs_major_;
         static constexpr auto quad_ys_minor  = QuadEncoding::ys_to_rhs_minor_;
 
-        static_assert(quad_ys_major.size() == 1 && quad_ys_minor.size() == 1,
-                      "YS->RHS mapping must be single dimension");
         static_assert(quad_ys_major.back() == 2 && quad_ys_minor.back() == quad_hs[I1].size() - 1,
                       "YS->RHS mapping must be the last dimension");
         static constexpr bool ys_mapping_valid =
@@ -263,7 +354,7 @@ struct TransposeTileDistributionTraits
         },
         number<InDstrEncode::NDimX>{});
 
-    // for PS→RHS mapping(both major and minor), we need to modify the last element (which is for
+    // for PS->RHS mapping(both major and minor), we need to modify the last element (which is for
     // thread distr) of the major sequence
     static constexpr auto dst_ps_to_rhss_major = generate_tuple(
         // for major because of dst_out_hs_lengthss is reversed, this index also need to be reversed
@@ -314,14 +405,25 @@ struct TransposeTileDistributionTraits
         },
         number<input_ps_to_rhss_minor.size()>{});
 
-    static constexpr auto outer_input_ys_to_rhs_major = input_ys_to_rhs_major.pop_back();
+    static constexpr auto outer_input_ys_to_rhs_major = input_ys_to_rhs_major.extract(
+        typename arithmetic_sequence_gen<0,
+                                         input_ys_to_rhs_major.size() -
+                                             QuadInputEncoding::ys_to_rhs_major_.size(),
+                                         1>::type{});
 
     // for major because of dst_out_hs_lengthss is reversed, this index also need to be reversed
     static constexpr auto dst_ys_to_rhs_major =
-        outer_input_ys_to_rhs_major.transform(swap_one_and_two).push_back(number<2>{});
+        outer_input_ys_to_rhs_major.transform(swap_one_and_two)
+            .push_back(QuadOutputEncoding::ys_to_rhs_major_);
 
-    static constexpr auto dst_ys_to_rhs_minor = input_ys_to_rhs_minor.pop_back().push_back(
-        number<(quad_output_ys_minor_offset + quad_output_ys_to_rhs_minor)[I0]>{});
+    static constexpr auto outer_input_ys_to_rhs_minor = input_ys_to_rhs_minor.extract(
+        typename arithmetic_sequence_gen<0,
+                                         input_ys_to_rhs_minor.size() -
+                                             QuadInputEncoding::ys_to_rhs_minor_.size(),
+                                         1>::type{});
+
+    static constexpr auto dst_ys_to_rhs_minor = outer_input_ys_to_rhs_minor.push_back(
+        quad_output_ys_minor_offset + QuadOutputEncoding::ys_to_rhs_minor_);
 
     using TransposedDstrEncode =
         tile_distribution_encoding<typename InDstrEncode::RsLengths,
@@ -373,6 +475,7 @@ CK_TILE_HOST_DEVICE constexpr auto InputTileDistributionEncoding()
  * element space size and vector length remain consistent between the input and output
  * distributions.
  *
+ * @tparam DistributedTensor_     The type of the tensor containing the transposed tile data.
  * @tparam BottomTensorView_      The type of the bottom tensor view.
  * @tparam WindowLengths_         The type representing the window lengths.
  * @tparam TileDistribution_      The type representing the tile distribution.
@@ -380,15 +483,123 @@ CK_TILE_HOST_DEVICE constexpr auto InputTileDistributionEncoding()
  * @tparam Policy                 The transpose policy to use (defaults to DefaultTranspose).
  * the last is SFINAE to ensure the tile distribution encoding is valid.
  *
+ * @param out_tensor              A statically distributed tensor containing the transposed tile
+ * data.
  * @param tile_window             The tile window with static distribution to load and transpose.
- *
- * @return A statically distributed tensor containing the transposed tile data.
+ * @param offset                  The offset (in elements) added to the base address before
+ * indexing.
  *
  * @note
  * - The function uses compile-time checks to ensure the input and output tile distributions
  *   are compatible in terms of element space size and vector length.
  * - The transpose operation is performed according to the specified Policy.
  */
+template <
+    typename DistributedTensor_,
+    typename BottomTensorView_,
+    typename WindowLengths_,
+    typename TileDistribution_,
+    index_t NumCoord,
+    typename Policy = DefaultTranspose<typename BottomTensorView_::DataType>,
+    typename        = std::enable_if_t<TransposeTileDistrChecker<TileDistribution_,
+                                                                 typename BottomTensorView_::DataType,
+                                                                 Policy>::distr_encoding_valid,
+                                       Policy>>
+CK_TILE_DEVICE void load_tile_transpose_with_offset(
+    DistributedTensor_& out_tensor,
+    const tile_window_with_static_distribution<BottomTensorView_,
+                                               WindowLengths_,
+                                               TileDistribution_,
+                                               NumCoord>& __restrict__ tile_window,
+    index_t offset)
+{
+    auto trans_tensor           = tile_window.template load_transpose_with_offset<Policy>(offset);
+    constexpr auto input_distr  = TileDistribution_{};
+    constexpr auto output_distr = typename DistributedTensor_::StaticTileDistribution{};
+
+    // Check that the tile distribution of out_tensor is the expected one for transposed loads.
+    using OutTileDstrEncode = typename OutputTileDistributionTraits<
+        typename TileDistribution_::DstrEncode,
+        typename BottomTensorView_::DataType>::TransposedDstrEncode;
+    static_assert(std::is_same_v<decltype(make_static_tile_distribution(OutTileDstrEncode{})),
+                                 remove_cvref_t<decltype(output_distr)>>);
+
+    // Check that the datatype of out_tensor matches that of the bottom tensor view.
+    static_assert(std::is_same_v<typename DistributedTensor_::DataType,
+                                 typename BottomTensorView_::DataType>);
+
+    constexpr auto y_in_desc  = input_distr.get_ys_to_d_descriptor();
+    constexpr auto y_out_desc = output_distr.get_ys_to_d_descriptor();
+
+    constexpr index_t NDimYIn = input_distr.get_num_of_dimension_y();
+
+    constexpr auto y_in_lengths = to_sequence(y_in_desc.get_lengths());
+
+    constexpr auto y_in_element_space_size  = y_in_desc.get_element_space_size();
+    constexpr auto y_out_element_space_size = y_out_desc.get_element_space_size();
+    static_assert(y_in_element_space_size == y_out_element_space_size,
+                  "the element space size is not the same!");
+
+    constexpr index_t vecLoadSize = y_in_lengths[NDimYIn - 1];
+    constexpr index_t num_of_access =
+        reduce_on_sequence(y_in_lengths, multiplies<>{}, number<1>{}) / vecLoadSize;
+
+    using DataVec = array<typename BottomTensorView_::DataType, vecLoadSize>;
+    static_for<0, num_of_access, 1>{}([&](auto iAccess) {
+        out_tensor.get_thread_buffer().template set_as<DataVec>(
+            number<iAccess>{},
+            trans_tensor.get_thread_buffer().template get_as<DataVec>(number<iAccess>{}));
+    });
+}
+
+/**
+ * @brief transpose loads tile from a tensor and returns the resulting tensor with a new
+ * (transposed) tile distribution. use SFINAE to ensure the tile distribution encoding is valid.
+ *
+ * This function is intended for use with statically distributed tensor tiles, where the input
+ * and output tile distributions differ due to the transpose operation. It ensures that the
+ * element space size and vector length remain consistent between the input and output
+ * distributions.
+ *
+ * @tparam DistributedTensor_     The type of the tensor containing the transposed tile data.
+ * @tparam BottomTensorView_      The type of the bottom tensor view.
+ * @tparam WindowLengths_         The type representing the window lengths.
+ * @tparam TileDistribution_      The type representing the tile distribution.
+ * @tparam NumCoord               The number of coordinates (dimensions).
+ * @tparam Policy                 The transpose policy to use (defaults to DefaultTranspose).
+ * the last is SFINAE to ensure the tile distribution encoding is valid.
+ *
+ * @param out_tensor              A statically distributed tensor containing the transposed tile
+ * data.
+ * @param tile_window             The tile window with static distribution to load and transpose.
+ * indexing.
+ *
+ * @note
+ * - The function uses compile-time checks to ensure the input and output tile distributions
+ *   are compatible in terms of element space size and vector length.
+ * - The transpose operation is performed according to the specified Policy.
+ */
+template <
+    typename DistributedTensor_,
+    typename BottomTensorView_,
+    typename WindowLengths_,
+    typename TileDistribution_,
+    index_t NumCoord,
+    typename Policy = DefaultTranspose<typename BottomTensorView_::DataType>,
+    typename        = std::enable_if_t<TransposeTileDistrChecker<TileDistribution_,
+                                                                 typename BottomTensorView_::DataType,
+                                                                 Policy>::distr_encoding_valid,
+                                       Policy>>
+CK_TILE_DEVICE void
+load_tile_transpose(DistributedTensor_& out_tensor,
+                    const tile_window_with_static_distribution<BottomTensorView_,
+                                                               WindowLengths_,
+                                                               TileDistribution_,
+                                                               NumCoord>& __restrict__ tile_window)
+{
+    load_tile_transpose_with_offset(out_tensor, tile_window, 0);
+}
+
 template <
     typename BottomTensorView_,
     typename WindowLengths_,
@@ -403,44 +614,135 @@ CK_TILE_DEVICE auto
 load_tile_transpose(const tile_window_with_static_distribution<BottomTensorView_,
                                                                WindowLengths_,
                                                                TileDistribution_,
-                                                               NumCoord>& tile_window)
+                                                               NumCoord>& __restrict__ tile_window)
 {
     using OutTileDstrEncode = typename OutputTileDistributionTraits<
         typename TileDistribution_::DstrEncode,
         typename BottomTensorView_::DataType>::TransposedDstrEncode;
     auto out_tensor = make_static_distributed_tensor<typename BottomTensorView_::DataType>(
         make_static_tile_distribution(OutTileDstrEncode{}));
-    auto trans_tensor           = tile_window.template load_transpose<Policy>();
+
+    load_tile_transpose_with_offset(out_tensor, tile_window, 0);
+
+    return out_tensor;
+}
+
+/**
+ * @brief Mixed-precision transpose load: converts input data type to output data type while
+ * transposing.
+ *
+ * This function enables transposing from one data type (e.g., fp8) to another (e.g., fp16) in a
+ * single operation. The input tile distribution encoding must be valid for the input data type,
+ * and the output distribution will be generated based on the output data type.
+ *
+ * @tparam DistributedTensor_     The output tensor type with desired output data type.
+ * @tparam BottomTensorView_      The input tensor view (may have different data type than output).
+ * @tparam WindowLengths_         The type representing the window lengths.
+ * @tparam TileDistribution_      The type representing the tile distribution for input.
+ * @tparam NumCoord_              The number of coordinates (dimensions).
+ * @tparam Policy                 The transpose policy (should validate against input type).
+ *
+ * @note
+ * - Input and output must have compatible element space sizes (total byte count per Y-space).
+ * - Type conversion is performed element-by-element during the copy.
+ * - The validation uses the input data type for quad pattern checking.
+ * - The output distribution is generated based on the output data type.
+ */
+template <
+    typename DistributedTensor_,
+    typename BottomTensorView_,
+    typename WindowLengths_,
+    typename TileDistribution_,
+    index_t NumCoord_,
+    index_t UnaryOpSize_,
+    typename PassThroughPack_,
+    typename Policy = DefaultTranspose<typename BottomTensorView_::DataType>,
+    typename        = std::enable_if_t<TransposeTileDistrChecker<TileDistribution_,
+                                                                 typename BottomTensorView_::DataType,
+                                                                 Policy>::distr_encoding_valid,
+                                       Policy>>
+CK_TILE_DEVICE void load_tile_transpose_convert_with_offset(
+    DistributedTensor_& out_tensor,
+    const tile_window_with_static_distribution<BottomTensorView_,
+                                               WindowLengths_,
+                                               TileDistribution_,
+                                               NumCoord_>& __restrict__ tile_window,
+    const index_t offset,
+    number<UnaryOpSize_>            = {},
+    PassThroughPack_ elementwise_op = {})
+{
+    using SrcDataType = typename BottomTensorView_::DataType;
+    using DstDataType = typename DistributedTensor_::DataType;
+
+    auto trans_tensor           = tile_window.template load_transpose_with_offset<Policy>(offset);
     constexpr auto input_distr  = TileDistribution_{};
-    constexpr auto output_distr = make_static_tile_distribution(OutTileDstrEncode{});
+    constexpr auto output_distr = typename DistributedTensor_::StaticTileDistribution{};
 
     constexpr auto y_in_desc  = input_distr.get_ys_to_d_descriptor();
     constexpr auto y_out_desc = output_distr.get_ys_to_d_descriptor();
-
-    constexpr index_t NDimYIn  = input_distr.get_num_of_dimension_y();
-    constexpr index_t NDimYOut = output_distr.get_num_of_dimension_y();
 
     constexpr auto y_in_lengths  = to_sequence(y_in_desc.get_lengths());
     constexpr auto y_out_lengths = to_sequence(y_out_desc.get_lengths());
 
     constexpr auto y_in_element_space_size  = y_in_desc.get_element_space_size();
     constexpr auto y_out_element_space_size = y_out_desc.get_element_space_size();
-    static_assert(y_in_element_space_size == y_out_element_space_size,
-                  "the element space size is not the same!");
-    static_assert(y_in_lengths[NDimYIn - 1] == y_out_lengths[NDimYOut - 1],
-                  "the vector length is not the same!");
-    constexpr index_t vecLoadSize = y_in_lengths[NDimYIn - 1];
-    constexpr index_t num_of_access =
-        reduce_on_sequence(y_in_lengths, multiplies{}, number<1>{}) / vecLoadSize;
 
-    using DataVec = array<typename BottomTensorView_::DataType, vecLoadSize>;
-    static_for<0, num_of_access, 1>{}([&](auto iAccess) {
-        out_tensor.get_thread_buffer().template set_as<DataVec>(
-            number<iAccess>{},
-            trans_tensor.get_thread_buffer().template get_as<DataVec>(number<iAccess>{}));
+    // For mixed precision: input and output element space sizes must be the same.
+    static_assert(
+        y_in_element_space_size == y_out_element_space_size,
+        "For mixed precision transpose, input and output element space sizes must match!");
+
+    // Ensure total element counts are consistent and divisible by the input vector length.
+    constexpr index_t total_elems_in =
+        reduce_on_sequence(y_in_lengths, multiplies<>{}, number<1>{});
+    constexpr index_t total_elems_out =
+        reduce_on_sequence(y_out_lengths, multiplies<>{}, number<1>{});
+    static_assert(total_elems_in == total_elems_out,
+                  "For mixed precision transpose, input/output element counts must match!");
+    static_assert(total_elems_in % number<UnaryOpSize_>{} == 0,
+                  "Input vector length must evenly divide total elements.");
+
+    constexpr index_t num_of_access = total_elems_in / number<UnaryOpSize_>{};
+
+    // Read as input type, convert to output type
+    using SrcDataVec = ext_vector_t<SrcDataType, number<UnaryOpSize_>{}>;
+    using DstDataVec = ext_vector_t<DstDataType, number<UnaryOpSize_>{}>;
+
+    static_for<0, num_of_access, 1>{}([&](auto i) {
+        elementwise_op(out_tensor.get_thread_buffer().template get_as<DstDataVec>()(i),
+                       trans_tensor.get_thread_buffer().template get_as<SrcDataVec>()[i]);
     });
+}
 
-    return out_tensor;
+/**
+ * @brief Mixed-precision transpose load with zero offset.
+ *
+ * Convenience wrapper for load_tile_transpose_convert_with_offset with offset=0.
+ */
+template <
+    typename DistributedTensor_,
+    typename BottomTensorView_,
+    typename WindowLengths_,
+    typename TileDistribution_,
+    index_t NumCoord_,
+    index_t UnaryOpSize_,
+    typename PassThroughPack_,
+    typename Policy = DefaultTranspose<typename BottomTensorView_::DataType>,
+    typename        = std::enable_if_t<TransposeTileDistrChecker<TileDistribution_,
+                                                                 typename BottomTensorView_::DataType,
+                                                                 Policy>::distr_encoding_valid,
+                                       Policy>>
+CK_TILE_DEVICE void load_tile_transpose_convert(
+    DistributedTensor_& out_tensor,
+    const tile_window_with_static_distribution<BottomTensorView_,
+                                               WindowLengths_,
+                                               TileDistribution_,
+                                               NumCoord_>& __restrict__ tile_window,
+    number<UnaryOpSize_>            = {},
+    PassThroughPack_ elementwise_op = {})
+{
+    load_tile_transpose_convert_with_offset(
+        out_tensor, tile_window, 0, number<UnaryOpSize_>{}, elementwise_op);
 }
 
 } // namespace ck_tile

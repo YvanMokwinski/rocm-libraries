@@ -1,5 +1,7 @@
-# Currently ck_tile is only built on gfx9
-if(GPU_TARGETS MATCHES "gfx9")
+# Copyright (c) Advanced Micro Devices, Inc., or its affiliates.
+# SPDX-License-Identifier: MIT
+
+if(GPU_TARGETS MATCHES "gfx9|gfx125")
     add_gtest_executable(test_ck_tile_batched_transpose test_batched_transpose.cpp)
     set_property(TARGET test_ck_tile_batched_transpose PROPERTY CXX_STANDARD 20)
 else()

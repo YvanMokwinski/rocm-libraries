@@ -21,6 +21,10 @@
 #include <gtest/gtest.h>
 #include <stdio.h>
 
+#include "test_common.hpp"
+#include "test_rocrand_common.hpp"
+
+#include <algorithm>
 #include <numeric>
 #include <random>
 
@@ -28,31 +32,7 @@
 #include <rocrand/rocrand_mtgp32_11213.h>
 #include <vector>
 
-#define HIP_CHECK(cmd)                                                                         \
-    do                                                                                         \
-    {                                                                                          \
-        auto error = (cmd);                                                                    \
-        if(error != hipSuccess)                                                                \
-        {                                                                                      \
-            std::cerr << "Encountered HIP error (" << hipGetErrorString(error) << ") at line " \
-                      << __LINE__ << " in file " << __FILE__ << "\n";                          \
-            exit(-1);                                                                          \
-        }                                                                                      \
-    }                                                                                          \
-    while(0)
-
-#define ROCRAND_CHECK(cmd)                                                                \
-    do                                                                                    \
-    {                                                                                     \
-        auto status = cmd;                                                                \
-        if(status != 0)                                                                   \
-        {                                                                                 \
-            std::cerr << "Encountered ROCRAND error: " << status << "at line" << __LINE__ \
-                      << " in file " << __FILE__ << "\n";                                 \
-            exit(-1);                                                                     \
-        }                                                                                 \
-    }                                                                                     \
-    while(0)
+#include <hip/hip_runtime.h>
 
 struct GlobalSizes
 {
@@ -63,28 +43,37 @@ struct GlobalSizes
     static constexpr size_t size             = grid_size * items_per_block;
 };
 
-using DiscreteDataType = ::testing::Types<double, unsigned int, unsigned long, unsigned long long int>;
+using DiscreteDataType
+    = ::testing::Types<double, unsigned int, unsigned long, unsigned long long int>;
 
-template <typename DT>
-class InternalDiscreteDistributionTests : public ::testing::Test{
-    public:
-        using T = DT;
+template<typename DT>
+class InternalDiscreteDistributionTests : public ::testing::Test
+{
+public:
+    using T = DT;
 };
 
 TYPED_TEST_SUITE(InternalDiscreteDistributionTests, DiscreteDataType);
 
-template<typename T, class DiscreteFunc>
-__global__ void internal_discrete_kernel(T * device_input, unsigned int * device_output, rocrand_discrete_distribution_st &dis, const DiscreteFunc & f){
+template<typename T, class DiscreteWrapper>
+__global__
+void internal_discrete_kernel(T*                                device_input,
+                              unsigned int*                     device_output,
+                              rocrand_discrete_distribution_st& dis)
+{
     const size_t items_per_block = GlobalSizes::items_per_thread * GlobalSizes::block_size;
-    const size_t offset = (items_per_block * blockIdx.x) + (GlobalSizes::items_per_thread * threadIdx.x);
+    const size_t offset
+        = (items_per_block * blockIdx.x) + (GlobalSizes::items_per_thread * threadIdx.x);
 
-    for(size_t i = 0; i < GlobalSizes::items_per_thread; i++){
-        device_output[offset + i] = f(device_input[offset + i], dis);
+    for(size_t i = 0; i < GlobalSizes::items_per_thread; i++)
+    {
+        device_output[offset + i] = DiscreteWrapper{}(device_input[offset + i], dis);
     }
 }
 
-template <typename T, class DiscreteFunc>
-void run_internal_discrete_tests(const DiscreteFunc & f){
+template<typename T, class DiscreteWrapper>
+void run_internal_discrete_tests()
+{
     std::vector<std::vector<double>> all_distributions = {
         {10, 10, 10, 10},
         {1, 2, 3, 4, 5, 6, 5, 4, 3, 2, 1},
@@ -93,52 +82,66 @@ void run_internal_discrete_tests(const DiscreteFunc & f){
     };
 
     std::random_device rd;
-    std::mt19937 gen(rd());
+    std::mt19937       gen(rd());
 
-    T * host_input = new T[GlobalSizes::size];
-    unsigned int * host_output = new unsigned int[GlobalSizes::size];
+    T*            host_input  = new T[GlobalSizes::size];
+    unsigned int* host_output = new unsigned int[GlobalSizes::size];
 
     // Check for different types of data input and generate the input data
-    if constexpr (std::is_same_v<T, double>){
+    if constexpr(std::is_same_v<T, double>)
+    {
         std::uniform_real_distribution<double> dis(0, 1);
-        for(size_t i = 0; i < GlobalSizes::size; i++) host_input[i] = dis(gen);
+        for(size_t i = 0; i < GlobalSizes::size; i++)
+            host_input[i] = dis(gen);
     }
-    else if constexpr(std::is_same_v<T, unsigned long> || std::is_same_v<T, unsigned int>){
+    else if constexpr(std::is_same_v<T, unsigned long> || std::is_same_v<T, unsigned int>)
+    {
         std::uniform_int_distribution<T> dis(0, std::numeric_limits<unsigned int>::max());
-        for(size_t i = 0; i < GlobalSizes::size; i++) host_input[i] = dis(gen);
+        for(size_t i = 0; i < GlobalSizes::size; i++)
+            host_input[i] = dis(gen);
     }
-    else{
+    else
+    {
         std::uniform_int_distribution<T> dis(0, std::numeric_limits<T>::max());
-        for(size_t i = 0; i < GlobalSizes::size; i++) host_input[i] = dis(gen);
+        for(size_t i = 0; i < GlobalSizes::size; i++)
+            host_input[i] = dis(gen);
     }
 
-    T * device_input;
-    unsigned int * device_output;
+    T*            device_input;
+    unsigned int* device_output;
 
     HIP_CHECK(hipMalloc(&device_input, sizeof(T) * GlobalSizes::size));
     HIP_CHECK(hipMalloc(&device_output, sizeof(unsigned int) * GlobalSizes::size));
 
-    HIP_CHECK(hipMemcpy(device_input, host_input, sizeof(T) * GlobalSizes::size, hipMemcpyHostToDevice));
+    HIP_CHECK(
+        hipMemcpy(device_input, host_input, sizeof(T) * GlobalSizes::size, hipMemcpyHostToDevice));
 
     // Generate different discrete distributions and check them against expected
-    for(std::vector<double> distribution : all_distributions){
+    for(std::vector<double> distribution : all_distributions)
+    {
         // Getting expected Results
-        double sum = std::accumulate(distribution.begin(), distribution.end(), 0);
+        double              sum = std::accumulate(distribution.begin(), distribution.end(), 0);
         std::vector<double> expected_prob(distribution.size());
         for(size_t i = 0; i < distribution.size(); i++)
             expected_prob[i] = distribution[i] / sum;
 
         // Creating the discrete distribution
         rocrand_discrete_distribution discrete_distribution;
-        ROCRAND_CHECK(rocrand_create_discrete_distribution(expected_prob.data(), expected_prob.size(), 0, &discrete_distribution));
+        ROCRAND_CHECK(rocrand_create_discrete_distribution(expected_prob.data(),
+                                                           expected_prob.size(),
+                                                           0,
+                                                           &discrete_distribution));
 
-        hipLaunchKernelGGL(
-            HIP_KERNEL_NAME(internal_discrete_kernel<T>),
-            dim3(GlobalSizes::grid_size), dim3(GlobalSizes::block_size), 0, 0,
-            device_input, device_output, *discrete_distribution, f
-        );
+        internal_discrete_kernel<T, DiscreteWrapper>
+            <<<dim3(GlobalSizes::grid_size), dim3(GlobalSizes::block_size), 0, 0>>>(
+                device_input,
+                device_output,
+                *discrete_distribution);
 
-        HIP_CHECK(hipMemcpy(host_output, device_output, sizeof(unsigned int) * GlobalSizes::size, hipMemcpyDeviceToHost));
+        HIP_CHECK(hipMemcpy(host_output,
+                            device_output,
+                            sizeof(unsigned int) * GlobalSizes::size,
+                            hipMemcpyDeviceToHost));
 
         std::vector<double> histogram(distribution.size());
 
@@ -150,52 +153,67 @@ void run_internal_discrete_tests(const DiscreteFunc & f){
         for(size_t i = 0; i < actual_prob.size(); i++)
             actual_prob[i] = histogram[i] / static_cast<double>(GlobalSizes::size);
 
-        // If the original probability is bigger than 5% then expected should be within 1% difference.
-        // Otherwise it should be within 0.01
-        for(size_t i = 0; i < expected_prob.size(); i++){
-            double eps = expected_prob[i] > 0.05 ? expected_prob[i] * 0.01 : 0.01;
-            ASSERT_NEAR(expected_prob[i], actual_prob[i], eps);
-        }
+        ASSERT_TRUE(ks_test_2(expected_prob, actual_prob));
 
         ROCRAND_CHECK(rocrand_destroy_discrete_distribution(discrete_distribution));
     }
 
-    delete [] host_input;
-    delete [] host_output;
+    delete[] host_input;
+    delete[] host_output;
 
     HIP_CHECK(hipFree(device_input));
     HIP_CHECK(hipFree(device_output));
 }
 
-TYPED_TEST(InternalDiscreteDistributionTests, InternalDiscreteAliasTest){
+template<typename T>
+struct internal_discrete_alias
+{
+    __device__
+    auto operator()(T val, rocrand_discrete_distribution_st& dis)
+    {
+        return rocrand_device::detail::discrete_alias(val, dis);
+    }
+};
+
+template<typename T>
+struct internal_discrete_cdf
+{
+    __device__
+    auto operator()(T val, rocrand_discrete_distribution_st& dis)
+    {
+        return rocrand_device::detail::discrete_cdf(val, dis);
+    }
+};
+
+TYPED_TEST(InternalDiscreteDistributionTests, InternalDiscreteAliasTest)
+{
     using T = typename TestFixture::T;
-    run_internal_discrete_tests<T>(
-        [=] __device__(T val, rocrand_discrete_distribution_st & dis)
-            {return rocrand_device::detail::discrete_alias(val, dis);}
-    );
+
+    run_internal_discrete_tests<T, internal_discrete_alias<T>>();
 }
 
-TYPED_TEST(InternalDiscreteDistributionTests, InternalDiscreteCDFTest){
+TYPED_TEST(InternalDiscreteDistributionTests, InternalDiscreteCDFTest)
+{
     using T = typename TestFixture::T;
-    run_internal_discrete_tests<T>(
-        [=] __device__(T val, rocrand_discrete_distribution_st & dis)
-            {return rocrand_device::detail::discrete_cdf(val, dis);}
-    );
+
+    run_internal_discrete_tests<T, internal_discrete_cdf<T>>();
 }
 
 template<class RocRandPrngType>
-__global__ void block_wide_external_discrete_kernel(
-    RocRandPrngType * states,
-    unsigned int * device_output,
-    rocrand_discrete_distribution_st & dis,
-    size_t items_per_thread,
-    size_t block_size
-){
+__global__
+void block_wide_external_discrete_kernel(RocRandPrngType*                  states,
+                                         unsigned int*                     device_output,
+                                         rocrand_discrete_distribution_st& dis,
+                                         size_t                            items_per_thread,
+                                         size_t                            block_size)
+{
     const size_t items_per_block = items_per_thread * block_size;
     const size_t offset = (items_per_block * blockIdx.x) + (items_per_thread * threadIdx.x);
 
-    for(size_t i = 0; i < items_per_thread; i++){
-        __shared__ RocRandPrngType state;
+    for(size_t i = 0; i < items_per_thread; i++)
+    {
+        __shared__
+        RocRandPrngType state;
         if(threadIdx.x == 0)
             state = states[blockIdx.x];
         __syncthreads();
@@ -209,31 +227,31 @@ __global__ void block_wide_external_discrete_kernel(
 }
 
 template<class RocRandPrngType>
-__global__ void external_discrete_kernel(
-    RocRandPrngType * states,
-    unsigned int * device_output,
-    rocrand_discrete_distribution_st & dis,
-    size_t items_per_thread,
-    size_t block_size
-){
+__global__
+void external_discrete_kernel(RocRandPrngType*                  states,
+                              unsigned int*                     device_output,
+                              rocrand_discrete_distribution_st& dis,
+                              size_t                            items_per_thread,
+                              size_t                            block_size)
+{
     const size_t items_per_block = items_per_thread * block_size;
     const size_t offset = (items_per_block * blockIdx.x) + (items_per_thread * threadIdx.x);
 
-    for(size_t i = 0; i < items_per_thread; i++){
-        auto local_state = states[offset + i];
+    for(size_t i = 0; i < items_per_thread; i++)
+    {
+        auto local_state          = states[offset + i];
         device_output[offset + i] = rocrand_discrete(&local_state, &dis);
-        states[offset + i] = local_state;
+        states[offset + i]        = local_state;
     }
 }
 
 template<bool block_wide, class PrngState>
-void run_external_discrete_tests(
-    PrngState & device_states,
-    size_t items_per_thread = GlobalSizes::items_per_thread,
-    size_t block_size = GlobalSizes::block_size,
-    size_t grid_size = GlobalSizes::grid_size,
-    size_t size = GlobalSizes::size
-){
+void run_external_discrete_tests(PrngState& device_states,
+                                 size_t     items_per_thread = GlobalSizes::items_per_thread,
+                                 size_t     block_size       = GlobalSizes::block_size,
+                                 size_t     grid_size        = GlobalSizes::grid_size,
+                                 size_t     size             = GlobalSizes::size)
+{
 
     std::vector<std::vector<double>> all_distributions = {
         {10, 10, 10, 10},
@@ -242,38 +260,57 @@ void run_external_discrete_tests(
         {1, 2, 8, 4, 3, 2, 1}
     };
 
-    unsigned int * host_output = new unsigned int[size];
-    unsigned int * device_output;
+    unsigned int* host_output = new unsigned int[size];
+    unsigned int* device_output;
     HIP_CHECK(hipMalloc(&device_output, sizeof(unsigned int) * size));
 
-    for(std::vector<double> distribution : all_distributions){
+    for(std::vector<double> distribution : all_distributions)
+    {
 
         // Getting expected Results
-        double sum = std::accumulate(distribution.begin(), distribution.end(), 0);
+        double              sum = std::accumulate(distribution.begin(), distribution.end(), 0);
         std::vector<double> expected_prob(distribution.size());
         for(size_t i = 0; i < distribution.size(); i++)
             expected_prob[i] = distribution[i] / sum;
 
         // Creating the discrete distribution
         rocrand_discrete_distribution discrete_distribution;
-        ROCRAND_CHECK(rocrand_create_discrete_distribution(expected_prob.data(), expected_prob.size(), 0, &discrete_distribution));
+        ROCRAND_CHECK(rocrand_create_discrete_distribution(expected_prob.data(),
+                                                           expected_prob.size(),
+                                                           0,
+                                                           &discrete_distribution));
 
-        if constexpr(block_wide){
-            hipLaunchKernelGGL(
-                HIP_KERNEL_NAME(block_wide_external_discrete_kernel),
-                dim3(grid_size), dim3(block_size), 0, 0,
-                device_states, device_output, *discrete_distribution, items_per_thread, block_size
-            );
+        if constexpr(block_wide)
+        {
+            hipLaunchKernelGGL(HIP_KERNEL_NAME(block_wide_external_discrete_kernel),
+                               dim3(grid_size),
+                               dim3(block_size),
+                               0,
+                               0,
+                               device_states,
+                               device_output,
+                               *discrete_distribution,
+                               items_per_thread,
+                               block_size);
         }
-        else{
-            hipLaunchKernelGGL(
-                HIP_KERNEL_NAME(external_discrete_kernel),
-                dim3(grid_size), dim3(block_size), 0, 0,
-                device_states, device_output, *discrete_distribution, items_per_thread, block_size
-            );
+        else
+        {
+            hipLaunchKernelGGL(HIP_KERNEL_NAME(external_discrete_kernel),
+                               dim3(grid_size),
+                               dim3(block_size),
+                               0,
+                               0,
+                               device_states,
+                               device_output,
+                               *discrete_distribution,
+                               items_per_thread,
+                               block_size);
         }
 
-        HIP_CHECK(hipMemcpy(host_output, device_output, sizeof(unsigned int) * size, hipMemcpyDeviceToHost));
+        HIP_CHECK(hipMemcpy(host_output,
+                            device_output,
+                            sizeof(unsigned int) * size,
+                            hipMemcpyDeviceToHost));
         std::vector<double> histogram(distribution.size());
 
         // Calculating the actual results
@@ -284,307 +321,326 @@ void run_external_discrete_tests(
         for(size_t i = 0; i < actual_prob.size(); i++)
             actual_prob[i] = histogram[i] / static_cast<double>(size);
 
-        // If the original probability is bigger than 5% then expected should be within 1% difference.
-        // Otherwise it should be within 0.01
-        for(size_t i = 0; i < expected_prob.size(); i++){
-            double eps = expected_prob[i] > 0.05 ? expected_prob[i] * 0.01 : 0.01;
-            ASSERT_NEAR(expected_prob[i], actual_prob[i], eps);
-        }
-
+        ASSERT_TRUE(ks_test_2(expected_prob, actual_prob));
         ROCRAND_CHECK(rocrand_destroy_discrete_distribution(discrete_distribution));
     }
 
-    delete [] host_output;
+    delete[] host_output;
     HIP_CHECK(hipFree(device_output));
 }
 
-template<class RocRandPrngType, class InitFunc>
-__global__ void init_rocrand_states_kernel(RocRandPrngType * states, const InitFunc & f){
+template<class RocRandPrngType>
+__global__
+void init_rocrand_states_kernel(RocRandPrngType* states)
+{
     constexpr size_t items_per_block = GlobalSizes::items_per_thread * GlobalSizes::block_size;
-    const size_t offset = (items_per_block * blockIdx.x) + (GlobalSizes::items_per_thread * threadIdx.x);
+    const size_t     offset
+        = (items_per_block * blockIdx.x) + (GlobalSizes::items_per_thread * threadIdx.x);
 
     for(size_t i = 0; i < GlobalSizes::items_per_thread; i++)
-        f(i, offset, &states[offset + i]);
+    {
+        rocrand_init(static_cast<unsigned int>(123456 ^ i), offset + i, 0, &states[offset + i]);
+    }
 }
 
-TEST(ExternalDiscreteDistributionTests, Philox4x32_10Test){
+template<class RocRandPrngType>
+__global__
+void init_rocrand_states_kernel4(RocRandPrngType* states)
+{
+    constexpr size_t items_per_block = GlobalSizes::items_per_thread * GlobalSizes::block_size;
+    const size_t     offset
+        = (items_per_block * blockIdx.x) + (GlobalSizes::items_per_thread * threadIdx.x);
+
+    for(size_t i = 0; i < GlobalSizes::items_per_thread; i++)
+    {
+        rocrand_init(uint4{static_cast<unsigned int>((123456 ^ i)),
+                           static_cast<unsigned int>((123456 ^ i) << 1),
+                           static_cast<unsigned int>((123456 ^ i) << 2),
+                           static_cast<unsigned int>((123456 ^ i) << 3)},
+                     offset + i,
+                     0,
+                     &states[offset + i]);
+    }
+}
+
+TEST(ExternalDiscreteDistributionTests, Philox4x32_10Test)
+{
     // Initialize the prng state
-    rocrand_state_philox4x32_10 * device_states;
+    rocrand_state_philox4x32_10* device_states;
     HIP_CHECK(hipMalloc(&device_states, sizeof(rocrand_state_philox4x32_10) * GlobalSizes::size));
 
-    hipLaunchKernelGGL(
-        HIP_KERNEL_NAME(init_rocrand_states_kernel),
-        dim3(GlobalSizes::grid_size), dim3(GlobalSizes::block_size), 0, 0,
-        device_states,
-        [] __device__ (size_t index, size_t offset, rocrand_state_philox4x32_10 * state){
+    struct f
+    {
+        __device__
+        static void init(size_t index, size_t offset, rocrand_state_philox4x32_10* state)
+        {
             rocrand_init((123456 ^ index), offset + index, 0, state);
         }
-    );
+    };
+
+    init_rocrand_states_kernel<<<dim3(GlobalSizes::grid_size),
+                                 dim3(GlobalSizes::block_size),
+                                 0,
+                                 0>>>(device_states);
 
     run_external_discrete_tests<false>(device_states);
 
     HIP_CHECK(hipFree(device_states));
 }
 
-TEST(ExternalDiscreteDistributionTests, Mrg31k3pTest){
+TEST(ExternalDiscreteDistributionTests, Mrg31k3pTest)
+{
     // Initialize the prng state
-    rocrand_state_mrg31k3p * device_states;
+    rocrand_state_mrg31k3p* device_states;
     HIP_CHECK(hipMalloc(&device_states, sizeof(rocrand_state_mrg31k3p) * GlobalSizes::size));
 
-    hipLaunchKernelGGL(
-        HIP_KERNEL_NAME(init_rocrand_states_kernel),
-        dim3(GlobalSizes::grid_size), dim3(GlobalSizes::block_size), 0, 0,
-        device_states,
-        [] __device__ (size_t index, size_t offset, rocrand_state_mrg31k3p * state){
+    struct f
+    {
+        __device__
+        static void init(size_t index, size_t offset, rocrand_state_mrg31k3p* state)
+        {
             rocrand_init((123456 ^ index), offset + index, 0, state);
         }
-    );
+    };
+
+    init_rocrand_states_kernel<<<dim3(GlobalSizes::grid_size),
+                                 dim3(GlobalSizes::block_size),
+                                 0,
+                                 0>>>(device_states);
 
     run_external_discrete_tests<false>(device_states);
 
     HIP_CHECK(hipFree(device_states));
 }
 
-TEST(ExternalDiscreteDistributionTests, Mrg32k3aTest){
+TEST(ExternalDiscreteDistributionTests, Mrg32k3aTest)
+{
     // Initialize the prng state
-    rocrand_state_mrg32k3a * device_states;
+    rocrand_state_mrg32k3a* device_states;
     HIP_CHECK(hipMalloc(&device_states, sizeof(rocrand_state_mrg32k3a) * GlobalSizes::size));
 
-    hipLaunchKernelGGL(
-        HIP_KERNEL_NAME(init_rocrand_states_kernel),
-        dim3(GlobalSizes::grid_size), dim3(GlobalSizes::block_size), 0, 0,
-        device_states,
-        [] __device__ (size_t index, size_t offset, rocrand_state_mrg32k3a * state){
-            rocrand_init((123456 ^ index), offset + index, 0, state);
-        }
-    );
+    init_rocrand_states_kernel<<<dim3(GlobalSizes::grid_size),
+                                 dim3(GlobalSizes::block_size),
+                                 0,
+                                 0>>>(device_states);
 
     run_external_discrete_tests<false>(device_states);
 
     HIP_CHECK(hipFree(device_states));
 }
 
-TEST(ExternalDiscreteDistributionTests, XorwowTest){
+TEST(ExternalDiscreteDistributionTests, XorwowTest)
+{
     // Initialize the prng state
-    rocrand_state_xorwow * device_states;
+    rocrand_state_xorwow* device_states;
     HIP_CHECK(hipMalloc(&device_states, sizeof(rocrand_state_xorwow) * GlobalSizes::size));
 
-    hipLaunchKernelGGL(
-        HIP_KERNEL_NAME(init_rocrand_states_kernel),
-        dim3(GlobalSizes::grid_size), dim3(GlobalSizes::block_size), 0, 0,
-        device_states,
-        [] __device__ (size_t index, size_t offset, rocrand_state_xorwow * state){
-            rocrand_init((123456 ^ index), offset + index, 0, state);
-        }
-    );
+    init_rocrand_states_kernel<<<dim3(GlobalSizes::grid_size),
+                                 dim3(GlobalSizes::block_size),
+                                 0,
+                                 0>>>(device_states);
 
     run_external_discrete_tests<false>(device_states);
 
     HIP_CHECK(hipFree(device_states));
 }
 
-TEST(ExternalDiscreteDistributionTests, Mtgp32Test){
+TEST(ExternalDiscreteDistributionTests, Mtgp32Test)
+{
     constexpr size_t items_per_thread = 1024;
-    constexpr size_t block_size = 256;
-    constexpr size_t grid_size = 12;
-    constexpr size_t items_per_block = block_size * items_per_thread;
+    constexpr size_t block_size       = 256;
+    constexpr size_t grid_size        = 12;
+    constexpr size_t items_per_block  = block_size * items_per_thread;
 
-    constexpr size_t test_size = items_per_block * grid_size;
-    rocrand_state_mtgp32 * states;
+    constexpr size_t      test_size = items_per_block * grid_size;
+    rocrand_state_mtgp32* states;
 
     HIP_CHECK(hipMalloc(&states, sizeof(rocrand_state_mtgp32) * grid_size));
-    rocrand_make_state_mtgp32(states,  mtgp32dc_params_fast_11213, grid_size, 123456);
+    rocrand_make_state_mtgp32(states, mtgp32dc_params_fast_11213, grid_size, 123456);
     HIP_CHECK(hipDeviceSynchronize());
 
-    run_external_discrete_tests<true>(
-        states,
-        items_per_thread,
-        block_size,
-        grid_size,
-        test_size
-    );
+    run_external_discrete_tests<true>(states, items_per_thread, block_size, grid_size, test_size);
     HIP_CHECK(hipFree(states));
 }
 
-TEST(ExternalDiscreteDistributionTests, Lfsr113Test){
+TEST(ExternalDiscreteDistributionTests, Lfsr113Test)
+{
     // Initialize the prng state
-    rocrand_state_lfsr113 * device_states;
+    rocrand_state_lfsr113* device_states;
     HIP_CHECK(hipMalloc(&device_states, sizeof(rocrand_state_lfsr113) * GlobalSizes::size));
 
-    hipLaunchKernelGGL(
-        HIP_KERNEL_NAME(init_rocrand_states_kernel),
-        dim3(GlobalSizes::grid_size), dim3(GlobalSizes::block_size), 0, 0,
-        device_states,
-        [] __device__ (size_t index, size_t offset, rocrand_state_lfsr113 * state){
-            rocrand_init(
-                {
-                    (123456 ^ index),
-                    (123456 ^ index) << 1,
-                    (123456 ^ index) << 2,
-                    (123456 ^ index) << 3
-                },
-                offset + index,
-                0,
-                state
-            );
-        }
-    );
+    init_rocrand_states_kernel4<<<dim3(GlobalSizes::grid_size),
+                                  dim3(GlobalSizes::block_size),
+                                  0,
+                                  0>>>(device_states);
 
     run_external_discrete_tests<false>(device_states);
 
     HIP_CHECK(hipFree(device_states));
 }
 
-TEST(ExternalDiscreteDistributionTests, Sobol32Test){
+TEST(ExternalDiscreteDistributionTests, Sobol32Test)
+{
     // Initialize the prng state
-    rocrand_state_sobol32 * host_states = new rocrand_state_sobol32[GlobalSizes::size];
-    const unsigned int* directions;
-    ROCRAND_CHECK(rocrand_get_direction_vectors32(&directions, ROCRAND_DIRECTION_VECTORS_32_JOEKUO6));
+    rocrand_state_sobol32* host_states = new rocrand_state_sobol32[GlobalSizes::size];
+    const unsigned int*    directions;
+    ROCRAND_CHECK(
+        rocrand_get_direction_vectors32(&directions, ROCRAND_DIRECTION_VECTORS_32_JOEKUO6));
 
     // 640000 is the size of directions. This is to prevent overflow stuff
     for(size_t i = 0; i < GlobalSizes::size; i++)
         rocrand_init(directions, i % 640000, host_states + i);
 
-    rocrand_state_sobol32 * device_states;
+    rocrand_state_sobol32* device_states;
     HIP_CHECK(hipMalloc(&device_states, sizeof(rocrand_state_sobol32) * GlobalSizes::size));
-    HIP_CHECK(hipMemcpy(device_states, host_states, sizeof(rocrand_state_sobol32) * GlobalSizes::size, hipMemcpyHostToDevice));
+    HIP_CHECK(hipMemcpy(device_states,
+                        host_states,
+                        sizeof(rocrand_state_sobol32) * GlobalSizes::size,
+                        hipMemcpyHostToDevice));
 
     run_external_discrete_tests<false>(device_states);
 
-    delete [] host_states;
+    delete[] host_states;
     HIP_CHECK(hipFree(device_states));
 }
 
-TEST(ExternalDiscreteDistributionTests, ScrambledSobol32Test){
+TEST(ExternalDiscreteDistributionTests, ScrambledSobol32Test)
+{
     // Initialize the prng state
-    rocrand_state_scrambled_sobol32 * host_states = new rocrand_state_scrambled_sobol32[GlobalSizes::size];
+    rocrand_state_scrambled_sobol32* host_states
+        = new rocrand_state_scrambled_sobol32[GlobalSizes::size];
     const unsigned int* directions;
-    ROCRAND_CHECK(rocrand_get_direction_vectors32(&directions, ROCRAND_DIRECTION_VECTORS_32_JOEKUO6));
+    ROCRAND_CHECK(
+        rocrand_get_direction_vectors32(&directions, ROCRAND_DIRECTION_VECTORS_32_JOEKUO6));
 
     // 640000 is the size of directions. This is to prevent overflow stuff
     for(size_t i = 0; i < GlobalSizes::size; i++)
         rocrand_init(directions, 123456 ^ i, i % 640000, host_states + i);
 
-    rocrand_state_scrambled_sobol32 * device_states;
-    HIP_CHECK(hipMalloc(&device_states, sizeof(rocrand_state_scrambled_sobol32) * GlobalSizes::size));
-    HIP_CHECK(hipMemcpy(device_states, host_states, sizeof(rocrand_state_scrambled_sobol32) * GlobalSizes::size, hipMemcpyHostToDevice));
+    rocrand_state_scrambled_sobol32* device_states;
+    HIP_CHECK(
+        hipMalloc(&device_states, sizeof(rocrand_state_scrambled_sobol32) * GlobalSizes::size));
+    HIP_CHECK(hipMemcpy(device_states,
+                        host_states,
+                        sizeof(rocrand_state_scrambled_sobol32) * GlobalSizes::size,
+                        hipMemcpyHostToDevice));
 
     run_external_discrete_tests<false>(device_states);
 
-    delete [] host_states;
+    delete[] host_states;
     HIP_CHECK(hipFree(device_states));
 }
 
-TEST(ExternalDiscreteDistributionTests, Sobol64Test){
+TEST(ExternalDiscreteDistributionTests, Sobol64Test)
+{
     // Initialize the prng state
-    rocrand_state_sobol64 * host_states = new rocrand_state_sobol64[GlobalSizes::size];
+    rocrand_state_sobol64*    host_states = new rocrand_state_sobol64[GlobalSizes::size];
     const unsigned long long* directions;
-    ROCRAND_CHECK(rocrand_get_direction_vectors64(&directions, ROCRAND_DIRECTION_VECTORS_64_JOEKUO6));
+    ROCRAND_CHECK(
+        rocrand_get_direction_vectors64(&directions, ROCRAND_DIRECTION_VECTORS_64_JOEKUO6));
 
     // 1280000 is the size of directions. This is to prevent overflow stuff
     for(size_t i = 0; i < GlobalSizes::size; i++)
         rocrand_init(directions, i % 1280000, host_states + i);
 
-    rocrand_state_sobol64 * device_states;
+    rocrand_state_sobol64* device_states;
     HIP_CHECK(hipMalloc(&device_states, sizeof(rocrand_state_sobol64) * GlobalSizes::size));
-    HIP_CHECK(hipMemcpy(device_states, host_states, sizeof(rocrand_state_sobol64) * GlobalSizes::size, hipMemcpyHostToDevice));
+    HIP_CHECK(hipMemcpy(device_states,
+                        host_states,
+                        sizeof(rocrand_state_sobol64) * GlobalSizes::size,
+                        hipMemcpyHostToDevice));
 
     run_external_discrete_tests<false>(device_states);
 
-    delete [] host_states;
+    delete[] host_states;
     HIP_CHECK(hipFree(device_states));
 }
 
-TEST(ExternalDiscreteDistributionTests, ScrambledSobol64Test){
+TEST(ExternalDiscreteDistributionTests, ScrambledSobol64Test)
+{
     // Initialize the prng state
-    rocrand_state_scrambled_sobol64 * host_states = new rocrand_state_scrambled_sobol64[GlobalSizes::size];
+    rocrand_state_scrambled_sobol64* host_states
+        = new rocrand_state_scrambled_sobol64[GlobalSizes::size];
     const unsigned long long* directions;
-    ROCRAND_CHECK(rocrand_get_direction_vectors64(&directions, ROCRAND_DIRECTION_VECTORS_64_JOEKUO6));
+    ROCRAND_CHECK(
+        rocrand_get_direction_vectors64(&directions, ROCRAND_DIRECTION_VECTORS_64_JOEKUO6));
 
     // 1280000 is the size of directions. This is to prevent overflow stuff
     for(size_t i = 0; i < GlobalSizes::size; i++)
         rocrand_init(directions, 123456 ^ i, i % 1280000, host_states + i);
 
-    rocrand_state_scrambled_sobol64 * device_states;
-    HIP_CHECK(hipMalloc(&device_states, sizeof(rocrand_state_scrambled_sobol64) * GlobalSizes::size));
-    HIP_CHECK(hipMemcpy(device_states, host_states, sizeof(rocrand_state_scrambled_sobol64) * GlobalSizes::size, hipMemcpyHostToDevice));
+    rocrand_state_scrambled_sobol64* device_states;
+    HIP_CHECK(
+        hipMalloc(&device_states, sizeof(rocrand_state_scrambled_sobol64) * GlobalSizes::size));
+    HIP_CHECK(hipMemcpy(device_states,
+                        host_states,
+                        sizeof(rocrand_state_scrambled_sobol64) * GlobalSizes::size,
+                        hipMemcpyHostToDevice));
 
     run_external_discrete_tests<false>(device_states);
 
-    delete [] host_states;
+    delete[] host_states;
     HIP_CHECK(hipFree(device_states));
 }
 
-TEST(ExternalDiscreteDistributionTests, Threefry2x32_20Test){
+TEST(ExternalDiscreteDistributionTests, Threefry2x32_20Test)
+{
     // Initialize the prng state
-    rocrand_state_threefry2x32_20 * device_states;
+    rocrand_state_threefry2x32_20* device_states;
     HIP_CHECK(hipMalloc(&device_states, sizeof(rocrand_state_threefry2x32_20) * GlobalSizes::size));
 
-    hipLaunchKernelGGL(
-        HIP_KERNEL_NAME(init_rocrand_states_kernel),
-        dim3(GlobalSizes::grid_size), dim3(GlobalSizes::block_size), 0, 0,
-        device_states,
-        [] __device__ (size_t index, size_t offset, rocrand_state_threefry2x32_20 * state){
-            rocrand_init((123456 ^ index), offset + index, 0, state);
-        }
-    );
+    init_rocrand_states_kernel<<<dim3(GlobalSizes::grid_size),
+                                 dim3(GlobalSizes::block_size),
+                                 0,
+                                 0>>>(device_states);
 
     run_external_discrete_tests<false>(device_states);
 
     HIP_CHECK(hipFree(device_states));
 }
 
-TEST(ExternalDiscreteDistributionTests, Threefry2x64_20Test){
+TEST(ExternalDiscreteDistributionTests, Threefry2x64_20Test)
+{
     // Initialize the prng state
-    rocrand_state_threefry2x64_20 * device_states;
+    rocrand_state_threefry2x64_20* device_states;
     HIP_CHECK(hipMalloc(&device_states, sizeof(rocrand_state_threefry2x64_20) * GlobalSizes::size));
 
-    hipLaunchKernelGGL(
-        HIP_KERNEL_NAME(init_rocrand_states_kernel),
-        dim3(GlobalSizes::grid_size), dim3(GlobalSizes::block_size), 0, 0,
-        device_states,
-        [] __device__ (size_t index, size_t offset, rocrand_state_threefry2x64_20 * state){
-            rocrand_init((123456 ^ index), offset + index, 0, state);
-        }
-    );
+    init_rocrand_states_kernel<<<dim3(GlobalSizes::grid_size),
+                                 dim3(GlobalSizes::block_size),
+                                 0,
+                                 0>>>(device_states);
 
     run_external_discrete_tests<false>(device_states);
 
     HIP_CHECK(hipFree(device_states));
 }
 
-TEST(ExternalDiscreteDistributionTests, Threefry4x32_20Test){
+TEST(ExternalDiscreteDistributionTests, Threefry4x32_20Test)
+{
     // Initialize the prng state
-    rocrand_state_threefry4x32_20 * device_states;
+    rocrand_state_threefry4x32_20* device_states;
     HIP_CHECK(hipMalloc(&device_states, sizeof(rocrand_state_threefry4x32_20) * GlobalSizes::size));
 
-    hipLaunchKernelGGL(
-        HIP_KERNEL_NAME(init_rocrand_states_kernel),
-        dim3(GlobalSizes::grid_size), dim3(GlobalSizes::block_size), 0, 0,
-        device_states,
-        [] __device__ (size_t index, size_t offset, rocrand_state_threefry4x32_20 * state){
-            rocrand_init((123456 ^ index), offset + index, 0, state);
-        }
-    );
+    init_rocrand_states_kernel<<<dim3(GlobalSizes::grid_size),
+                                 dim3(GlobalSizes::block_size),
+                                 0,
+                                 0>>>(device_states);
 
     run_external_discrete_tests<false>(device_states);
 
     HIP_CHECK(hipFree(device_states));
 }
 
-TEST(ExternalDiscreteDistributionTests, Threefry4x64_20Test){
+TEST(ExternalDiscreteDistributionTests, Threefry4x64_20Test)
+{
     // Initialize the prng state
-    rocrand_state_threefry4x64_20 * device_states;
+    rocrand_state_threefry4x64_20* device_states;
     HIP_CHECK(hipMalloc(&device_states, sizeof(rocrand_state_threefry4x64_20) * GlobalSizes::size));
 
-    hipLaunchKernelGGL(
-        HIP_KERNEL_NAME(init_rocrand_states_kernel),
-        dim3(GlobalSizes::grid_size), dim3(GlobalSizes::block_size), 0, 0,
-        device_states,
-        [] __device__ (size_t index, size_t offset, rocrand_state_threefry4x64_20 * state){
-            rocrand_init((123456 ^ index), offset + index, 0, state);
-        }
-    );
+    init_rocrand_states_kernel<<<dim3(GlobalSizes::grid_size),
+                                 dim3(GlobalSizes::block_size),
+                                 0,
+                                 0>>>(device_states);
 
     run_external_discrete_tests<false>(device_states);
 
@@ -592,31 +648,32 @@ TEST(ExternalDiscreteDistributionTests, Threefry4x64_20Test){
 }
 
 template<size_t items_per_thread, size_t block_size>
-__global__ void uint4_kernel(rocrand_state_philox4x32_10 * states, uint4 * device_output, rocrand_discrete_distribution_st & dis){
+__global__
+void uint4_kernel(rocrand_state_philox4x32_10*      states,
+                  uint4*                            device_output,
+                  rocrand_discrete_distribution_st& dis)
+{
     const size_t items_per_block = items_per_thread * block_size;
     const size_t offset = (items_per_block * blockIdx.x) + (items_per_thread * threadIdx.x);
 
-    for(size_t i = 0; i < items_per_thread; i++){
-        auto local_state = states[offset + i];
+    for(size_t i = 0; i < items_per_thread; i++)
+    {
+        auto local_state          = states[offset + i];
         device_output[offset + i] = rocrand_discrete4(&local_state, &dis);
-        states[offset + i] = local_state;
+        states[offset + i]        = local_state;
     }
 }
 
 TEST(ExternalDiscreteDistributionTests, Philox4x32_10WithUIN4OutputTest)
 {
     // Initialize the prng state
-    rocrand_state_philox4x32_10 * device_states;
+    rocrand_state_philox4x32_10* device_states;
     HIP_CHECK(hipMalloc(&device_states, sizeof(rocrand_state_philox4x32_10) * GlobalSizes::size));
 
-    hipLaunchKernelGGL(
-        HIP_KERNEL_NAME(init_rocrand_states_kernel),
-        dim3(GlobalSizes::grid_size), dim3(GlobalSizes::block_size), 0, 0,
-        device_states,
-        [] __device__ (size_t index, size_t offset, rocrand_state_philox4x32_10 * state){
-            rocrand_init((123456 ^ index), offset + index, 0, state);
-        }
-    );
+    init_rocrand_states_kernel<<<dim3(GlobalSizes::grid_size),
+                                 dim3(GlobalSizes::block_size),
+                                 0,
+                                 0>>>(device_states);
 
     std::vector<std::vector<double>> all_distributions = {
         {10, 10, 10, 10},
@@ -625,33 +682,45 @@ TEST(ExternalDiscreteDistributionTests, Philox4x32_10WithUIN4OutputTest)
         {1, 2, 8, 4, 3, 2, 1}
     };
 
-    uint4 * host_output = new uint4[GlobalSizes::size];
-    uint4 * device_output;
+    uint4* host_output = new uint4[GlobalSizes::size];
+    uint4* device_output;
     HIP_CHECK(hipMalloc(&device_output, sizeof(uint4) * GlobalSizes::size));
 
-    for(std::vector<double> distribution : all_distributions){
+    for(std::vector<double> distribution : all_distributions)
+    {
 
         // Getting expected Results
-        double sum = std::accumulate(distribution.begin(), distribution.end(), 0);
+        double              sum = std::accumulate(distribution.begin(), distribution.end(), 0);
         std::vector<double> expected_prob(distribution.size());
         for(size_t i = 0; i < distribution.size(); i++)
             expected_prob[i] = distribution[i] / sum;
 
         // Creating the discrete distribution
         rocrand_discrete_distribution discrete_distribution;
-        ROCRAND_CHECK(rocrand_create_discrete_distribution(expected_prob.data(), expected_prob.size(), 0, &discrete_distribution));
+        ROCRAND_CHECK(rocrand_create_discrete_distribution(expected_prob.data(),
+                                                           expected_prob.size(),
+                                                           0,
+                                                           &discrete_distribution));
 
         hipLaunchKernelGGL(
             HIP_KERNEL_NAME(uint4_kernel<GlobalSizes::items_per_thread, GlobalSizes::block_size>),
-            dim3(GlobalSizes::grid_size), dim3(GlobalSizes::block_size), 0, 0,
-            device_states, device_output, * discrete_distribution
-        );
+            dim3(GlobalSizes::grid_size),
+            dim3(GlobalSizes::block_size),
+            0,
+            0,
+            device_states,
+            device_output,
+            *discrete_distribution);
 
-        HIP_CHECK(hipMemcpy(host_output, device_output, sizeof(uint4) * GlobalSizes::size, hipMemcpyDeviceToHost));
+        HIP_CHECK(hipMemcpy(host_output,
+                            device_output,
+                            sizeof(uint4) * GlobalSizes::size,
+                            hipMemcpyDeviceToHost));
         std::vector<double> histogram(distribution.size());
 
         // Calculating the actual results
-        for(size_t i = 0; i < GlobalSizes::size; i++){
+        for(size_t i = 0; i < GlobalSizes::size; i++)
+        {
             histogram[host_output[i].w]++;
             histogram[host_output[i].x]++;
             histogram[host_output[i].y]++;
@@ -662,18 +731,13 @@ TEST(ExternalDiscreteDistributionTests, Philox4x32_10WithUIN4OutputTest)
         for(size_t i = 0; i < actual_prob.size(); i++)
             actual_prob[i] = histogram[i] / static_cast<double>(GlobalSizes::size * 4);
 
-        // If the original probability is bigger than 5% then expected should be within 1% difference.
-        // Otherwise it should be within 0.01
-        for(size_t i = 0; i < expected_prob.size(); i++){
-            double eps = expected_prob[i] > 0.05 ? expected_prob[i] * 0.01 : 0.01;
-            ASSERT_NEAR(expected_prob[i], actual_prob[i], eps);
-        }
-
+        ASSERT_TRUE(ks_test_2(expected_prob, actual_prob));
         ROCRAND_CHECK(rocrand_destroy_discrete_distribution(discrete_distribution));
     }
 
-    delete [] host_output;
+    delete[] host_output;
     HIP_CHECK(hipFree(device_output));
+    HIP_CHECK(hipFree(device_states));
 }
 
 /* #################################################
@@ -753,13 +817,11 @@ void run_internal_host_test(const DiscreteFunc& df)
         for(size_t i = 0; i < actual_prob.size(); i++)
             actual_prob[i] = histogram[i] / static_cast<double>(test_size);
 
-        // If the original probability is bigger than 5% then expected should be within 1% difference.
-        // Otherwise it should be within 0.01
-        for(size_t i = 0; i < expected_prob.size(); i++)
-        {
-            double eps = expected_prob[i] > 0.05 ? expected_prob[i] * 0.05 : 0.01;
-            ASSERT_NEAR(expected_prob[i], actual_prob[i], eps);
-        }
+        ASSERT_TRUE(ks_test_2(expected_prob, actual_prob));
+
+        rocrand_err = discrete_distribution_factory<discrete_method::DISCRETE_METHOD_UNIVERSAL,
+                                                    true>::deallocate(discrete_dis);
+        ROCRAND_CHECK(rocrand_err);
     }
 }
 
@@ -901,13 +963,11 @@ void run_host_test(const DiscreteFunc& df)
         for(size_t i = 0; i < actual_prob.size(); i++)
             actual_prob[i] = histogram[i] / static_cast<double>(test_size);
 
-        // If the original probability is bigger than 5% then expected should be within 1% difference.
-        // Otherwise it should be within 0.01
-        for(size_t i = 0; i < expected_prob.size(); i++)
-        {
-            double eps = expected_prob[i] > 0.05 ? expected_prob[i] * 0.05 : 0.01;
-            ASSERT_NEAR(expected_prob[i], actual_prob[i], eps);
-        }
+        ASSERT_TRUE(ks_test_2(expected_prob, actual_prob));
+
+        rocrand_err = discrete_distribution_factory<discrete_method::DISCRETE_METHOD_UNIVERSAL,
+                                                    true>::deallocate(discrete_dis);
+        ROCRAND_CHECK(rocrand_err);
     }
 }
 

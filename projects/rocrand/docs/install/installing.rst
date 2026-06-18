@@ -1,242 +1,100 @@
 .. meta::
-   :description: rocRAND installation guide
-   :keywords: rocRAND, ROCm, API, documentation, installation
+   :description: Installation instructions for rocRAND
+   :keywords: lib, hiprand, rand, rng, random, algorithm, install, sdk, rocm
 
-.. _installing:
+.. _installation:
 
-*******************************************************************
-Installing and building rocRAND
-*******************************************************************
+***************
+Install rocRAND
+***************
 
-This topic describes how to install or build rocRAND. The easiest method is to install the prebuilt
-packages from the ROCm repositories, but this chapter also describes how to build rocRAND from source.
+Before you begin, verify that your system is supported. For more information,
+see :ref:`ROCm Core SDK components <rocm:release-components>`.
 
-Requirements
-===============================
+For advanced workflows, source builds, or custom configurations, see
+:doc:`./build`.
 
-rocRAND has the following prerequisites:
+.. _install-rocm:
 
-*  CMake (version 3.16 or later)
-*  C++ compiler with C++17 support to build the library
+Install the ROCm Core SDK
+=========================
 
-   *  gcc version 9 or later is recommended
-   *  Clang uses the development headers and libraries from gcc, so a recent version of it must still be installed when compiling with clang
+rocRAND is included with the ROCm Core SDK on Linux and Windows. For the most
+complete installation on Linux, we recommend that developers use the
+``amdrocm-core-sdk`` meta package.
 
-*  C++ compiler with C++11 support to use the library
+For instructions, see :doc:`Install AMD ROCm <rocm:install/rocm>`. Use the
+selector panel on that page to view instructions appropriate for your system
+environment.
 
-*  (Optional) Fortran compiler (This is only required for the Fortran wrapper. GFortran is recommended.)
+.. _install-base:
 
-*  (Optional) GoogleTest (This is only required to build and use the tests. Building the tests is enabled by default.)
+Install ROCm rand libraries on Linux
+====================================
 
-   Use ``GTEST_ROOT`` to specify the GoogleTest location. For more information,
-   see `FindGTest <https://cmake.org/cmake/help/latest/module/FindGTest.html>`_.
-   
-   .. note::
+Alternatively, if you want to install rocRAND as part of the ROCm
+rand package (a subset of the ROCm Core SDK ``amdrocm-core-sdk``) without
+additional ROCm libraries and tools, install the ``amdrocm-rand`` package.
+This includes rocRAND and hipRAND.
 
-      If GoogleTest is not already installed, it will be automatically downloaded and built.
+1. Complete the :doc:`ROCm installation prerequisites <rocm:install/rocm>` to
+   install dependencies and configure GPU access permissions.
 
-The following additional components are required to use rocRAND on AMD platforms:
+2. Install the ROCm rand package that matches your desired ROCm version,
+   development package needs, and AMD GPU architecture. Package names use the
+   following format:
 
-*  ROCm (see the :doc:`ROCm installation guide <rocm-install-on-linux:install/quick-start>`)
-*  A HIP-clang compiler, which must be set as the C++ compiler on the ROCm platform.
+   .. code-block:: shell-session
 
-The following additional components are required to use rocRAND on NVIDIA CUDA platforms:
+      amdrocm-rand<-dev/-devel><rocm_version><-llvm_target>
 
-*  HIP
-*  The latest CUDA SDK
+   Where:
 
-Install using prebuilt packages
-===============================
+   * ``<-dev/-devel>`` specifies whether to install the library files and
+     headers. Omit this suffix to only install runtime packages.
 
-To install the prebuilt rocRAND packages, you require a ROCm-enabled platform.
-For information on installing ROCm, see the :doc:`ROCm installation guide <rocm-install-on-linux:install/quick-start>`.
-After installing ROCm or enabling the ROCm repositories, use the system package manager to install rocRAND.
+     * ``-dev`` is used on Debian-based distributions, including Ubuntu.
 
-For Ubuntu and Debian:
+     * ``-devel`` is used on RPM-based distributions, including RHEL and SLES.
 
-.. code-block:: shell
+   * ``<rocm_version>`` is the ROCm Core SDK version to install. Omit this
+     suffix to install the latest available version.
 
-   sudo apt-get install rocrand
+   * ``<-llvm_target>`` (starting with ``gfx``) is used if you are installing
+     for a single AMD GPU architecture. Omit this to install for all
+     architectures at the cost of disk space.
 
-For CentOS-based systems:
+   For example: ``amdrocm-rand-dev7.13-gfx950``
 
-.. code-block:: shell
+   Use the following command to install the latest development package release
+   for supported GPU architectures:
 
-   sudo yum install rocrand
+   .. tab-set::
 
-For SLES:
+      .. tab-item:: Debian-based distros
 
-.. code-block:: shell
+         .. code-block:: bash
 
-   sudo dnf install rocrand
+            sudo apt install amdrocm-rand-dev
 
-These commands install rocRAND in the ``/opt/rocm`` directory.
+      .. tab-item:: RHEL-based distros
 
-Build rocRAND from source
-===============================
+         .. code-block:: bash
 
-This section provides the information required to build rocRAND from source.
+            sudo dnf install amdrocm-rand-devel
 
+      .. tab-item:: SLES
 
-Obtaining the rocRAND source code
----------------------------------
+         .. code-block:: bash
 
-The rocRAND source code is available from the `rocrand folder <https://github.com/ROCm/rocm-libraries/tree/develop/projects/rocrand>`_ of
-the `rocm-libraries <https://github.com/ROCm/rocm-libraries>`_ GitHub repository.
-Use the branch that matches the ROCm version installed on the system.
-The rocRAND source code can be cloned in two different ways.
+            sudo zypper install amdrocm-rand-devel
 
-.. note::
+.. _install-nightly:
 
-   For both methods, replace all occurrences of "x.y" in the commands with the version number matching your ROCm installation.
-   For example, if you have ROCm 7.0 installed, clone the ``release/rocm-rel-7.0`` branch.
+Install a nightly build
+=======================
 
-*  Clone the entire `rocm-libraries <https://github.com/ROCm/rocm-libraries>`_ repository.
-   This is the default method and is the recommended option if you need to install other
-   ROCm libraries alongside rocRAND. However, due to the download size, ``git clone``
-   might take a significant amount of time to complete.
-
-   On a system with ROCm x.y installed, use the following command to obtain the source code
-   for rocRAND version x.y. Replace x.y with the actual version:
-
-   .. code-block:: shell
-
-      git clone -b release/rocm-rel-x.y https://github.com/ROCm/rocm-libraries.git
-
-*  Clone the individual rocRAND project folder. This option only fetches the rocRAND source code,
-   without any additional ROCm libraries. This significantly reduces the amount of time required
-   to complete the clone operation. However, it requires Git 2.25 or later.
-   To use this method to obtain the source code for rocRAND version x.y, run the following commands.
-   Replace x.y with the actual version:
-
-   .. code-block:: shell
-
-      git clone -b release/rocm-rel-x.y --no-checkout --depth=1 --filter=tree:0 https://github.com/ROCm/rocm-libraries.git
-      cd rocm-libraries
-      git sparse-checkout set --cone projects/rocrand
-      git checkout release/rocm-rel-x.y
-
-.. note::
-
-   To build ROCm 6.4 and earlier, use the rocRAND repository at `<https://github.com/ROCm/rocRAND>`_.
-   For more information, see the documentation associated with the release you want to build.
-
-Building the library
---------------------
-
-After downloading the source code, use the installation script to build rocRAND:
-
-.. code-block:: shell
-
-   cd rocm-libraries/projects/rocrand
-   ./install --install
-
-This automatically builds all required dependencies, excluding HIP and Git, and installs the project
-to ``/opt/rocm``. For further information, run the ``./install --help`` command.
-
-Building with CMake
---------------------
-
-For a more detailed installation process, build rocRAND manually using CMake.
-This enables certain configuration options that are not available through the ``install`` script.
-To build rocRAND, use CMake with the following configuration:
-
-.. code-block:: shell
-
-   cd rocm-libraries/projects/rocrand; mkdir build; cd build
-   # Configure the project
-   CXX=<compiler> cmake [options] ..
-   # Build
-   make -j4
-   # Optionally, run the tests
-   ctest --output-on-failure
-   # Install
-   [sudo] make install
-
-To build for the ROCm platform, ``<compiler>`` should be set to ``hipcc``. To build for CUDA,
-``<compiler>`` should be set to the host compiler. For CUDA, if the location of ``nvcc`` isn't on the path, it might need to be
-passed explicitly using ``-DCMAKE_CUDA_COMPILER=<path-to-nvcc>``.
-Additionally, the directory where ``FindHIP.cmake`` is installed needs to be passed explicitly
-using ``-DCMAKE_MODULE_PATH``. By default, this file is installed in ``/opt/rocm/hip/cmake``.
-
-In addition to the built-in CMake options, the following configuration options are available:
-
-* ``BUILD_FORTRAN_WRAPPER``: Controls whether to build the Fortran wrapper. Defaults to ``OFF``.
-* ``BUILD_TEST``: Controls whether to build the rocRAND tests. Defaults to ``OFF``.
-* ``BUILD_BENCHMARK``: Controls whether to build the rocRAND benchmarks. Defaults to ``OFF``.
-* ``BUILD_ADDRESS_SANITIZER`` Controls whether to build with address sanitization enabled. Defaults to ``OFF``.
-
-To install rocRAND with a non-standard installation location of ROCm, pass ``-DCMAKE_PREFIX_PATH=</path/to/opt/rocm/>``
-or set the environment variable ``ROCM_PATH`` to ``path/to/opt/rocm``.
-
-rocRAND with HIP on Windows
-===============================
-
-rocRAND with HIP on Microsoft Windows has the following additional prerequisites:
-
-*  Python 3.6 or higher (Only required for the install script)
-*  Visual Studio 2019 with Clang support
-*  Strawberry Perl
-
-
-To install support for rocRAND and HIP on Windows, use the ``rmake.py`` Python script as follows:
-
-.. code-block:: shell
-
-   git clone https://github.com/ROCm/rocm-libraries.git 
-   cd rocm-libraries/projects/rocrand
-
-   # the -i option will install rocRAND to C:\hipSDK by default
-   python rmake.py -i
-
-   # the -c option will build all clients including unit tests
-   python rmake.py -c
-
-Any existing GoogleTest library in the system (especially static GoogleTest libraries built with other compilers)
-might cause a build failure. If you encounter errors with the existing GoogleTest library or other dependencies,
-pass the ``DEPENDENCIES_FORCE_DOWNLOAD`` flag to CMake to help solve the problem.
-
-To disable inline assembly optimizations in rocRAND for both the host library and the device functions provided in ``rocrand_kernel.h``,
-set the CMake option ``ENABLE_INLINE_ASM`` to ``OFF``.
-
-Building the Python API wrapper
-===============================
-
-This section provides the information required to build the rocRAND Python API wrapper.
-
-Requirements
---------------------
-
-The rocRAND Python API Wrapper requires the following dependencies:
-
-* rocRAND
-* Python 3.5
-* NumPy (will be installed automatically as a dependency if necessary)
-
-.. note::
-
-   If rocRAND is built from source but is either not installed or installed in a
-   non-standard directory, set the ``ROCRAND_PATH`` environment variable
-   to the library location. For example:
-
-   .. code-block:: shell
-
-      export ROCRAND_PATH=~rocm-libraries/projects/rocrand/build/library/
-
-Installation
---------------------
-
-The Python rocRAND module can be installed using ``pip``:
-
-.. code-block:: shell
-
-   cd rocm-libraries/projects/rocrand/python/rocrand
-   pip install .
-
-The tests can be executed as follows:
-
-.. code-block:: shell
-
-   cd rocm-libraries/projects/rocrand/python/rocrand
-   python tests/rocrand_test.py
-
+The `TheRock <https://github.com/ROCm/TheRock>`__ build system also publishes
+nightly builds for the ROCm Core SDK and its components, including rocRAND.
+See `Nightly release status
+<https://github.com/ROCm/TheRock#nightly-release-status>`__ for details.

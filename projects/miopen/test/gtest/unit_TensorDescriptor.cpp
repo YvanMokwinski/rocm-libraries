@@ -239,7 +239,7 @@ public:
             TestCase{{miopenHalf, {2, 2, 2, 1}, {1000, 100, 10, 10000}}, {"NCHW"}, ignore_degenerate_strides},
             TestCase{{miopenHalf, {1, 2, 2, 2}, {1, 1, 100, 10}}, {"NHWC"}, ignore_degenerate_strides},
             TestCase{{miopenHalf, {2, 2, 1, 2}, {1000, 1, 10000, 10}}, {"NHWC"}, ignore_degenerate_strides},
-            TestCase{{miopenHalf, {2, 2, 2, 1}, {1000, 1, 100, 10000}}, {"NHWC"}, ignore_degenerate_strides},          
+            TestCase{{miopenHalf, {2, 2, 2, 1}, {1000, 1, 100, 10000}}, {"NHWC"}, ignore_degenerate_strides},
             TestCase{{miopenHalf, {2, 1, 2, 2}, {1, 1, 100, 10}}, {"CHWN"}, ignore_degenerate_strides},
             TestCase{{miopenHalf, {2, 2, 1, 2}, {1, 1000, 10000, 10}}, {"CHWN"}, ignore_degenerate_strides},
             TestCase{{miopenHalf, {2, 2, 2, 1}, {1, 1000, 100, 10000}}, {"CHWN"}, ignore_degenerate_strides},
@@ -248,7 +248,7 @@ public:
             TestCase{{miopenHalf, {1, 1, 1, 1}, {1, 1000, 100, 10}}, {"NCHW", "NHWC", "CHWN"}, ignore_degenerate_strides},
 
             TestCase{{miopenHalf, {1, 1, 1, 1, 1}, {10000, 1000, 100, 10, 1}}, {"NCDHW", "NDHWC"}, ignore_degenerate_strides},
-            TestCase{{miopenHalf, {1, 1, 1, 1, 1}, {10000, 1, 1000, 100, 10}}, {"NCDHW", "NDHWC"}, ignore_degenerate_strides},     
+            TestCase{{miopenHalf, {1, 1, 1, 1, 1}, {10000, 1, 1000, 100, 10}}, {"NCDHW", "NDHWC"}, ignore_degenerate_strides},
             TestCase{{miopenHalf, {1, 2, 2, 2, 2}, {1, 1000, 100, 10, 1}}, {"NCDHW"}, ignore_degenerate_strides},
             TestCase{{miopenHalf, {2, 1, 2, 2, 2}, {10000, 100000, 100, 10, 1}}, {"NCDHW", "NDHWC"}, ignore_degenerate_strides},
             TestCase{{miopenHalf, {2, 2, 1, 2, 2}, {10000, 1000, 100000, 10, 1}}, {"NCDHW"}, ignore_degenerate_strides},
@@ -318,7 +318,7 @@ public:
     {
         const auto p  = GetParam();
         const auto td = p.tp.GetTensorDescriptor();
-        ASSERT_EQ(td.GetLayout_t(), p.actual_layout);
+        ASSERT_EQ(td.GetLayoutEnum(), p.actual_layout);
     }
 };
 
@@ -633,6 +633,14 @@ public:
             TestCase{{miopenHalf, {maxv, maxv1, maxv1, maxv1}, {1, 1, 1, 1}}, false, true},
             TestCase{{miopenHalf, {1, 1, 1, 1}, {maxv1, maxv, maxv1, maxv1}}, true, false},
             TestCase{{miopenHalf, {maxv1, maxv1, maxv1, maxv}, {maxv1, maxv1, maxv1, maxv1}}, false, false},
+
+            // Boundary at exactly INT_MAX in a single position (other positions trivial).
+            // CheckDimsFitIntoInt uses strict `>`, so exactly INT_MAX must pass.
+            TestCase{{miopenHalf, {1, 1, 1, maxv}, {1, 1, 1, 1}}, true, true},
+            TestCase{{miopenHalf, {1, 1, 1, 1}, {1, 1, 1, maxv}}, true, true},
+            // One past INT_MAX in a single position must be rejected.
+            TestCase{{miopenHalf, {1, 1, 1, maxv1}, {1, 1, 1, 1}}, false, true},
+            TestCase{{miopenHalf, {1, 1, 1, 1}, {1, 1, 1, maxv1}}, true, false},
             // clang-format on
         };
     }

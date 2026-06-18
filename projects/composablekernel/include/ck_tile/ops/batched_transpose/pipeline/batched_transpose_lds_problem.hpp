@@ -1,5 +1,5 @@
+// Copyright (c) Advanced Micro Devices, Inc., or its affiliates.
 // SPDX-License-Identifier: MIT
-// Copyright (c) Advanced Micro Devices, Inc. All rights reserved.
 
 #pragma once
 
@@ -18,19 +18,18 @@ struct BatchedTransposeLdsProblem
 {
     using DataType = remove_cvref_t<DataType_>;
 
-    static constexpr index_t kRowWarps_    = NumWarps::at(number<1>{});
-    static constexpr index_t kColWarps_    = NumWarps::at(number<0>{});
-    static constexpr index_t kBlockSize_   = get_warp_size() * kRowWarps_ * kColWarps_;
-    static constexpr index_t kRowPerBlock_ = BlockTile::at(number<1>{});
-    static constexpr index_t kColPerBlock_ = BlockTile::at(number<0>{});
+    static constexpr index_t kRowWarps_    = NumWarps::at(number<0>{});
+    static constexpr index_t kColWarps_    = NumWarps::at(number<1>{});
+    static constexpr index_t kRowPerBlock_ = BlockTile::at(number<0>{});
+    static constexpr index_t kColPerBlock_ = BlockTile::at(number<1>{});
 
-    static constexpr index_t kBlockSize = kBlockSize_;
+    static constexpr index_t kBlockSize = get_warp_size() * kRowWarps_ * kColWarps_;
     // warps per block
-    static constexpr index_t kLeadNumWarps   = kRowWarps_;
-    static constexpr index_t kSecondNumWarps = kColWarps_;
+    static constexpr index_t kLeadNumWarps   = kColWarps_;
+    static constexpr index_t kSecondNumWarps = kRowWarps_;
 
-    static constexpr index_t kLeadSizePerBlock   = kRowPerBlock_;
-    static constexpr index_t kSecondSizePerBlock = kColPerBlock_;
+    static constexpr index_t kLeadSizePerBlock   = kColPerBlock_;
+    static constexpr index_t kSecondSizePerBlock = kRowPerBlock_;
 
     static constexpr index_t kQuadrantLeadDim   = LaneGroupTransposeTraits<DataType>::kleadDim;
     static constexpr index_t kQuadrantSecondDim = LaneGroupTransposeTraits<DataType>::ksecondDim;
@@ -47,6 +46,20 @@ struct BatchedTransposeLdsProblem
                   "xdl dim should be divided by quad dim!");
     static_assert(kSecondSizePerWarp % kQuadrantSecondDim == 0,
                   "xdl dim should be divided by quad dim!");
+
+    // TODO: unify for all architectures
+    // Specific to gfx125x
+    // TODO: these two should be tuned ; but kLeadQuadSize * kSecondQuadSize will be 4(wave64) or
+    //  2(wave32)
+    static constexpr index_t kLeadQuadSize = 1;
+    // if warp size is 64; quad size is 4; otherwise quad size is 2
+    static constexpr index_t kSecondQuadSize = (get_warp_size() == 64 ? 4 : 2) / kLeadQuadSize;
+
+    // this will be the smallest granularity of warp tile for transpose
+    static constexpr index_t kWarpTileLeadDim   = kLeadQuadSize * kQuadrantLeadDim;
+    static constexpr index_t kWarpTileSecondDim = kSecondQuadSize * kQuadrantSecondDim;
+
+    // pre gfx125
     // xdl rows/cols is divided into quadrants.
     static constexpr index_t kQuadNumPerLeadDim   = kLeadSizePerWarp / kQuadrantLeadDim;
     static constexpr index_t kQuadNumPerSecondDim = kSecondSizePerWarp / kQuadrantSecondDim;
@@ -60,8 +73,8 @@ struct BatchedTransposeLdsProblem
     static constexpr bool kPadM = kPadM_;
     static constexpr bool kPadN = kPadN_;
 
-    static constexpr auto kMPerBlock = kLeadSizePerBlock;
-    static constexpr auto kNPerBlock = kSecondSizePerBlock;
+    static constexpr auto kMPerBlock = kSecondSizePerBlock;
+    static constexpr auto kNPerBlock = kLeadSizePerBlock;
 
     // 128-bit is the max single-instruction bandwidth for load/store
     static constexpr index_t MaxLoadStoreSize = 16;

@@ -590,17 +590,14 @@ rocblas_status rocsolver_larft_template(rocblas_handle handle,
     // Fix diagonal of T, make zero the not used triangular part,
     // setup tau (changing signs) and account for the non-stored 1's on the
     // householder vectors
-    rocblas_int blocks = (k - 1) / 32 + 1;
-    ROCSOLVER_LAUNCH_KERNEL(set_triangular, dim3(blocks, blocks, batch_count), dim3(32, 32), 0,
+    rocblas_int blocks = (k - 1) / BS2 + 1;
+    ROCSOLVER_LAUNCH_KERNEL(set_triangular, dim3(blocks, blocks, batch_count), dim3(BS2, BS2), 0,
                             stream, n, k, V, shiftV, ldv, strideV, tau, strideT, F, ldf, strideF,
                             direct, storev, use_gemm);
     ROCSOLVER_LAUNCH_KERNEL(set_tau, dim3(blocks, batch_count), dim3(32, 1), 0, stream, k, tau,
                             strideT);
 
-    int device;
-    HIP_CHECK(hipGetDevice(&device));
-    hipDeviceProp_t props;
-    HIP_CHECK(hipGetDeviceProperties(&props, device));
+    const hipDeviceProp_t* props = rocblas_internal_get_device_prop(handle);
     size_t lmemsize = sizeof(T) * (k + 1) * k;
 
     rocblas_set_pointer_mode(handle, rocblas_pointer_mode_device);
@@ -614,7 +611,7 @@ rocblas_status rocsolver_larft_template(rocblas_handle handle,
         //      IT WILL WORK ON THE ENTIRE MATRIX/VECTOR REGARDLESS OF
         //      ZERO ENTRIES ****
 
-        if(k <= LARFT_SWITCHSIZE && lmemsize <= props.sharedMemPerBlock)
+        if(k <= LARFT_SWITCHSIZE && lmemsize <= props->sharedMemPerBlock)
         {
             ROCSOLVER_LAUNCH_KERNEL(larft_kernel_forward, dim3(1, batch_count), dim3(BS1, 1),
                                     lmemsize, stream, storev, u1_n, k, V, shiftV, ldv, strideV, tau,
@@ -668,7 +665,7 @@ rocblas_status rocsolver_larft_template(rocblas_handle handle,
         //      IT WILL WORK ON THE ENTIRE MATRIX/VECTOR REGARDLESS OF
         //      ZERO ENTRIES ****
 
-        if(k <= LARFT_SWITCHSIZE && lmemsize <= props.sharedMemPerBlock)
+        if(k <= LARFT_SWITCHSIZE && lmemsize <= props->sharedMemPerBlock)
         {
             auto shiftU2 = shiftV
                 + ((storev == rocblas_column_wise) ? idx2D(u2_n, 0, ldv) : idx2D(0, u2_n, ldv));
@@ -895,9 +892,9 @@ rocblas_status rocsolver_larft_inverse_template(rocblas_handle handle,
         tri_offset = (!forward && n > k) ? idx2D(0, n - k, ldv) : 0;
     }
 
-    rocblas_int blocks = (k - 1) / 32 + 1;
+    rocblas_int blocks = (k - 1) / BS2 + 1;
     dim3 gridTri(blocks, blocks, batch_count);
-    dim3 blockTri(32, 32);
+    dim3 blockTri(BS2, BS2);
 
     // set V to unit triangular/trapezoidal
     ROCSOLVER_LAUNCH_KERNEL((larft_set_tri), gridTri, blockTri, 0, stream, tri_uplo, k, V,

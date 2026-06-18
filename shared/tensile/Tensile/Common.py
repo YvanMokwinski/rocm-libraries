@@ -86,7 +86,7 @@ globalParameters["PreciseKernelTime"] = True      # T=On hip, use the timestamps
 globalParameters["CodeFromFiles"] = True          # if False byte arrays will be generated during Benchmarking phase as before
 globalParameters["SortProblems"] = False          # sort problems by size; else use order in YAML file
 globalParameters["PinClocks"] = False             # T=pin gpu clocks and fan, F=don't
-globalParameters["HardwareMonitor"] = True        # False: disable benchmarking client monitoring clocks using rocm-smi.
+globalParameters["HardwareMonitor"] = True        # False: disable benchmarking client monitoring clocks using amd-smi.
 globalParameters["NumBenchmarks"] = 1             # how many benchmark data points to collect per problem/solution
 globalParameters["NumWarmups"] = 0                # how many warmup runs to perform before benchmark
 globalParameters["SyncsPerBenchmark"] = 1         # how iterations of the stream synchronization for-loop to do per benchmark data point
@@ -246,12 +246,12 @@ globalParameters["NumMergedFiles"] = 1            # The number of files that ker
 
 globalParameters["MaxFileName"] = 64              # If a file name would be longer than this, shorten it with a hash.
 globalParameters["SupportedISA"] = [(8,0,3),
-                                    (9,0,0), (9,0,6), (9,0,8), (9,0,10),
+                                    (9,0,0), (9,0,6), (9,0,8), (9,0,10), (9,0,12),
                                     (9,4,2), (9,5,0),
-                                    (10,1,0), (10,1,1), (10,1,2), (10,3,0), (10,3,1),
+                                    (10,1,0), (10,1,1), (10,1,2), (10,3,0), (10,3,1), (10,3,2), (10,3,3), (10,3,4), (10,3,5), (10,3,6),
                                     (11,0,0), (11,0,1), (11,0,2), (11,0,3),
-                                    (11,5,0), (11,5,1),
-                                    (12,0,0), (12,0,1)] # assembly kernels writer supports these architectures
+                                    (11,5,0), (11,5,1), (11,5,2), (11,5,3),
+                                    (12,0,0), (12,0,1), (12,5,0)] # assembly kernels writer supports these architectures
 
 globalParameters["KeepBuildTmp"] = True                           # Do not remove build artifacts during the build process or build_tmp after build completes
 globalParameters["GenerateManifestAndExit"] = False               # Output manifest file with list of expected library objects and exit
@@ -268,7 +268,7 @@ globalParameters["DictLibraryLogic"] = False
 # internal, i.e., gets set during startup
 globalParameters["CurrentISA"] = (0,0,0)
 globalParameters["ROCmAgentEnumeratorPath"] = None      # /opt/rocm/bin/rocm_agent_enumerator
-globalParameters["ROCmSMIPath"] = None                  # /opt/rocm/bin/rocm-smi
+globalParameters["AMDSMIPath"] = None                  # /opt/rocm/bin/amd-smi
 globalParameters["AssemblerPath"] = None                # /opt/rocm/llvm/bin/clang++
 globalParameters["WorkingPath"] = os.getcwd()           # path where tensile called from
 globalParameters["IndexChars"] =  "IJKLMNOPQRSTUVWXYZ"  # which characters to use for C[ij]=Sum[k] A[ik]*B[jk]
@@ -316,18 +316,20 @@ defaultGlobalParameters = deepcopy(globalParameters)
 
 # Translate GPU targets to filter filenames in Tensile_LOGIC directory
 architectureMap = {
-  'all':'_','gfx000':'none', 'gfx803':'r9nano', 'gfx900':'vega10', 'gfx900:xnack-':'vega10',
+  'all':'_', 'gfx000':'none', 'fallback':'hip',
+  'gfx803':'r9nano', 'gfx900':'vega10', 'gfx900:xnack-':'vega10', 'gfx90c':'vega10',
   'gfx906':'vega20', 'gfx906:xnack+':'vega20', 'gfx906:xnack-':'vega20',
   'gfx908':'arcturus','gfx908:xnack+':'arcturus', 'gfx908:xnack-':'arcturus',
   'gfx90a':'aldebaran', 'gfx90a:xnack+':'aldebaran', 'gfx90a:xnack-':'aldebaran',
   'gfx942':'aquavanjaram942', 'gfx942:xnack+':'aquavanjaram942', 'gfx942:xnack-':'aquavanjaram942',
   'gfx950':'gfx950', 'gfx950:xnack+':'gfx950', 'gfx950:xnack-':'gfx950',
   'gfx1010':'navi10', 'gfx1011':'navi12', 'gfx1012':'navi14',
-  'gfx1030':'navi21', 'gfx1031':'navi22', 'gfx1032':'navi23', 'gfx1034':'navi24', 'gfx1035':'rembrandt',
+  'gfx1030':'navi21', 'gfx1031':'navi22', 'gfx1032':'navi23', 'gfx1033':'van gogh', 'gfx1034':'navi24', 'gfx1035':'rembrandt', 'gfx1036':'raphael',
   'gfx1100':'navi31', 'gfx1101':'navi32', 'gfx1102':'navi33', 'gfx1103':'gfx1103',
-  'gfx1150':'strixpoint', 'gfx1151':'strixhalo',
+  'gfx1150':'strixpoint', 'gfx1151':'strixhalo', 'gfx1152':'gfx1152', 'gfx1153':'gfx1153',
   'gfx1200':'gfx1200',
-  'gfx1201':'gfx1201'
+  'gfx1201':'gfx1201',
+  'gfx1250':'gfx1250'
 }
 
 def getArchitectureName(gfxName: str) -> Optional[str]:
@@ -566,7 +568,7 @@ validParameters = {
     # Chooses how to do GlobalSplitU:
     # - SingleBuffer: uses atomic operation to accumulate on one buffer
     # - MultipleBuffer: each GSU group writes to its own buffer and the postGSU accumulates the buffer
-    # if GlobalSplitU=1, this parameter will be ignored (and will be set to SingleBuffer if it is 
+    # if GlobalSplitU=1, this parameter will be ignored (and will be set to SingleBuffer if it is
     # MultipleBuffer for consistency in lib logics).
     # GSU/GSUAlo can be used with all gemm types, except for I8II.
     # When GSU>1, we need extra kernels (other than the main assembly kernel) to do the computations. The language of these
@@ -808,7 +810,7 @@ validParameters = {
     #   - Optimizations enabled by AssertSummationElementMultiple>1 will be adjusted as follows.
     #     ASEM%GSU == 0 and ASEM//GSU will be used for optimizations instead of ASEM
     #     For example, if ASEM is 8 and GSU is 2, K is multiple of 8 but K is divided by GSU.
-    #     In that case, we can still guarantee K/GSU is multiple of 4 (= ASEM/GSU) and 
+    #     In that case, we can still guarantee K/GSU is multiple of 4 (= ASEM/GSU) and
     #     we can use ASEM//GSU=4 for optimizations
     #
     # 1 indicates no assertion (since all sizes are multiples of 1)
@@ -1175,7 +1177,7 @@ validParameters = {
     # The priority of these environment variables is defined as follows:
     # TENSILE_STREAMK_FIXED_GRID > TENSILE_STREAMK_DYNAMIC_GRID > TENSILE_STREAMK_MAX_CUS > TENSILE_STREAMK_GRID_MULTIPLIER
     "StreamK": [0, 1, 2, 3],
-    
+
     # Determines if StreamK kernel uses atomics
     # 0: uses workspace to store partial tiles, accumulate in deterministic fix-up step
     # 1: uses atomics to accumulate partial tiles
@@ -1488,7 +1490,7 @@ validParameters = {
     "MinVgprNumber":                list(range(0,256)),
 
     "MaxVgprNumber":                list(range(0,257)),
-    # min K size to use GlobalSplitU algorithm 
+    # min K size to use GlobalSplitU algorithm
     "MinKForGSU":                   [16,32,64,128,256]
     }
 
@@ -1750,7 +1752,7 @@ defaultProblemType = {
     "DataType":                 0,                # data types can specified by a variety of ways, such as "s", as listed in SolutionStructs.py::DataType
     "DestDataType":             0,                # destination data types can specified by a variety of ways, such as "s", as listed in SolutionStructs.py::DataType
     "ComputeDataType":          0,                # compute data types can specified by a variety of ways, such as "s", as listed in SolutionStructs.py::DataType
-    
+
     "UseBeta":                  True,             # =True use beta parameter (asm will check for B=0 and optimize the write for that), =False don't use beta parameter
     "HighPrecisionAccumulate":  False,            # f32 += f16*f16
     "SilentHighPrecisionAccumulate": False,       # Keep kernel names the same for HPA mode.  Useful for testing.
@@ -1871,12 +1873,12 @@ defaultProblemType = {
     # FP16 Alternate Implementation
     "Fp16AltImpl":              False,
     "Fp16AltImplRound":         False,
-    
-    # Use unpack version of up-conversion instruction for f8/b8. 
+
+    # Use unpack version of up-conversion instruction for f8/b8.
     "Fp8NoPackUpConversion" :   False,
 
-    # S/W clipping of f32 to f8/b8 down conversion. When it is set, the kernel clips any value which is greater 
-    # than max_f8_value (e.g., 240.0 for f8) to max_f8_value in down conversion. NaN and +/-INF are propagated. 
+    # S/W clipping of f32 to f8/b8 down conversion. When it is set, the kernel clips any value which is greater
+    # than max_f8_value (e.g., 240.0 for f8) to max_f8_value in down conversion. NaN and +/-INF are propagated.
     # By default, it is set for f8 kernels.
     "Fp32toFp8SWClip" :         True,
 
@@ -1885,11 +1887,11 @@ defaultProblemType = {
 
     # Rounding mode for f32 to f8 down conversion
     # TODO in Future:
-    # There are two different rounding modes for f32 to f8 down conversion: [0]: IEEE RNE mode and [1/2]: stochastic mode. 
-    # For stochastic mode, there are two implementations to use random numbers in H/W instruction: 
+    # There are two different rounding modes for f32 to f8 down conversion: [0]: IEEE RNE mode and [1/2]: stochastic mode.
+    # For stochastic mode, there are two implementations to use random numbers in H/W instruction:
     #   In-device [1]: we need to pass the seed of random number and kernel will generate the pseudo-random numbers
-    #   RND-table [2]: we need to pass a table of random numbers to the kernel, NOT implemented yet  
-    #"StochasticRounding" :     0  # [0,1,2]   0=NA, 1=in-device, 2=RND Table. By default, IEEE RNE rounding    
+    #   RND-table [2]: we need to pass a table of random numbers to the kernel, NOT implemented yet
+    #"StochasticRounding" :     0  # [0,1,2]   0=NA, 1=in-device, 2=RND Table. By default, IEEE RNE rounding
     }
 
 defaultProblemSizes = [{"Range": [ [2880], 0, 0 ]}]
@@ -1993,7 +1995,7 @@ def printExit(message):
 
 ################################################################################
 # Locate Executables
-# rocm-smi, hip-clang, rocm_agent_enumerator, clang-offload-bundler
+# amd-smi, hip-clang, rocm_agent_enumerator, clang-offload-bundler
 ################################################################################
 def isExe( filePath ):
   return os.path.isfile(filePath) and os.access(filePath, os.X_OK)
@@ -2109,8 +2111,8 @@ def GetAsmCaps(isaVersion: IsaVersion, hipVersion: SemanticVersion, cachedAsmCap
     if len(hipVersion) >= 2:
       ignoreCacheCheck = ignoreCacheCheck or \
                          hipVersion.major < 5 or \
-                         (hipVersion.major == 5 and hipVersion.minor <= 2) 
-    
+                         (hipVersion.major == 5 and hipVersion.minor <= 2)
+
     if not derivedAsmCaps["SupportedISA"] and cachedAsmCaps[isaVersion]["SupportedISA"]:
       printWarning("Architecture {} not supported by ROCm {}".format(isaVersion, globalParameters['HipClangVersion']), DeveloperWarning)
       ignoreCacheCheck = True
@@ -2151,7 +2153,7 @@ def GetArchCaps(isaVersion):
   rv["CrosslaneWait"]      = (isaVersion==(9,4,2) or isaVersion==(9,5,0))
   rv["ForceStoreSC1"]      = False
   rv["HasDTLx4"]           = isaVersion==(9,5,0)
-  
+
   return rv
 
 def tryAssembler(isaVersion, asmString, debug=False, *options):
@@ -2189,7 +2191,7 @@ def tryAssembler(isaVersion, asmString, debug=False, *options):
     return False
   return True
 
-def gfxArch(name):
+def gfxArch(name: str) -> Optional[IsaVersion]:
     import re
     match = re.search(r'gfx([0-9a-fA-F]{3,})', name)
     if not match: return None
@@ -2354,7 +2356,7 @@ def populateCapabilities(
     """
     supportedISA = globalParameters["SupportedISA"]
     to_remove = []
-   
+
     emptyCache = not bool(globalParameters["AsmCaps"])
 
     for v in supportedISA + [(0, 0, 0)]:
@@ -2413,7 +2415,7 @@ def assignGlobalParameters( config, capabilitiesCache: Optional[dict] = None ):
       tPrint(3, " %24s: %8s (unspecified)" % (key, defaultValue))
 
   if "KeepBuildTmp" in config:
-    globalParameters["KeepBuildTmp"] = config["KeepBuildTmp"] 
+    globalParameters["KeepBuildTmp"] = config["KeepBuildTmp"]
 
   globalParameters["ROCmPath"] = "/opt/rocm"
   if "ROCM_PATH" in os.environ:
@@ -2440,7 +2442,7 @@ def assignGlobalParameters( config, capabilitiesCache: Optional[dict] = None ):
   else:
     raise ValueError("CxxCompiler not specified in config")
   if "CCompiler" in config:
-    globalParameters["CCompiler"] = config["CCompiler"]    
+    globalParameters["CCompiler"] = config["CCompiler"]
   else:
     raise ValueError("CCompiler not specified in config")
   if "Assembler" in config:
@@ -2452,19 +2454,20 @@ def assignGlobalParameters( config, capabilitiesCache: Optional[dict] = None ):
   else:
     raise ValueError("OffloadBundler not specified in config")
 
-  globalParameters["ROCmSMIPath"] = locateExe(globalParameters["ROCmBinPath"], "rocm-smi")
+  globalParameters["AMDSMIPath"] = locateExe(globalParameters["ROCmBinPath"], "amd-smi")
 
   globalParameters["ExtractKernelPath"] = locateExe(os.path.join(globalParameters["ROCmPath"], "hip/bin"), "extractkernel")
 
   # read current gfx version
   returncode = detectGlobalCurrentISA()
   if globalParameters["CurrentISA"] == (0,0,0):
-    printWarning("Did not detect SupportedISA: %s; cannot benchmark assembly kernels." % globalParameters["SupportedISA"])
+    printWarning(f"Did not detect SupportedISA: {globalParameters['SupportedISA']}; cannot benchmark assembly kernels."\
+      "This warning can be safely ignored for TensileCreateLibrary builds.")
   if returncode:
     if os.name == "nt":
       globalParameters["CurrentISA"] = (9,0,6)
       printWarning("Failed to detect ISA so forcing (gfx906) on windows")
-  isasWithDisabledHWMonitor = ((9,4,2), (9,5,0), (11,0,0), (11,0,1), (11,0,2), (12,0,0), (12,0,1))
+  isasWithDisabledHWMonitor = ((9,4,2), (9,5,0), (11,0,0), (11,0,1), (11,0,2), (11,0,3), (11,5,0), (11,5,1), (11,5,2), (11,5,3), (12,0,0), (12,0,1))
   if globalParameters["CurrentISA"] in isasWithDisabledHWMonitor:
     isaString = ', '.join(map(gfxName, isasWithDisabledHWMonitor))
     printWarning(f"HardwareMonitor currently disabled for {isaString}")
@@ -2472,7 +2475,7 @@ def assignGlobalParameters( config, capabilitiesCache: Optional[dict] = None ):
 
   if "IgnoreAsmCapCache" in config:
     globalParameters["IgnoreAsmCapCache"] = config["IgnoreAsmCapCache"]
-    
+
   globalParameters["CacheAsmCaps"] = True if capabilitiesCache is not None else False
   globalParameters["AsmCaps"] = capabilitiesCache if globalParameters["CacheAsmCaps"] else {}
   globalParameters["ArchCaps"] = {}
@@ -2526,9 +2529,9 @@ def setupRestoreClocks():
   import atexit
   def restoreClocks():
     if globalParameters["PinClocks"]:
-      rsmi = globalParameters["ROCmSMIPath"]
-      subprocess.call([rsmi, "-d", "0", "--resetclocks"])
-      subprocess.call([rsmi, "-d", "0", "--setfan", "50"])
+      asmi = globalParameters["AMDSMIPath"]
+      subprocess.call([asmi, "-d", "0", "--resetclocks"])
+      subprocess.call([asmi, "-d", "0", "--setfan", "50"])
   atexit.register(restoreClocks)
 setupRestoreClocks()
 
@@ -2661,7 +2664,7 @@ CMakeHeader = """###############################################################
 
 ###################################################
 # This file was generated by Tensile:             #
-# https://github.com/ROCmSoftwarePlatform/Tensile #
+# https://github.com/ROCm/Tensile                 #
 ###################################################
 
 
@@ -2690,7 +2693,7 @@ CHeader = """/******************************************************************
 
 /**************************************************
 * This file was generated by Tensile:             *
-* https://github.com/ROCmSoftwarePlatform/Tensile *
+* https://github.com/ROCm/Tensile                 *
 **************************************************/
 
 

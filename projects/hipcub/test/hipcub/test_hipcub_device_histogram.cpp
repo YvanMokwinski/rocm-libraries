@@ -29,9 +29,9 @@
 #include "common_test_header.hpp"
 
 // hipcub API
-#include "hipcub/device/device_histogram.hpp"
-#include "hipcub/iterator/counting_input_iterator.hpp"
-#include "hipcub/iterator/transform_input_iterator.hpp"
+#include <hipcub/device/device_histogram.hpp>
+#include <hipcub/iterator/counting_input_iterator.hpp>
+#include <hipcub/iterator/transform_input_iterator.hpp>
 
 // rows, columns, (row_stride - columns * Channels)
 std::vector<std::tuple<size_t, size_t, size_t>> get_dims()
@@ -387,7 +387,7 @@ TYPED_TEST(HipcubDeviceHistogramEvenOverflow, EvenOverflow)
         SCOPED_TRACE(testing::Message() << "with seed= " << seed_value);
 
         // Generate data
-        auto          d_input = hipcub::CountingInputIterator<sample_type>{0UL};
+        auto          d_input = rocprim::counting_iterator<sample_type>{0UL};
         counter_type* d_histogram;
         HIP_CHECK(test_common_utils::hipMallocHelper(&d_histogram, bins * sizeof(counter_type)));
 
@@ -795,7 +795,7 @@ TYPED_TEST(HipcubDeviceHistogramMultiEven, MultiEven)
             SCOPED_TRACE(testing::Message() << "with seed= " << seed_value);
 
             std::vector<unsigned int> channel_seeds = test_utils::get_random_data<unsigned int>(
-                size,
+                std::max(size, static_cast<size_t>(channels)),
                 std::numeric_limits<unsigned int>::min(),
                 std::numeric_limits<unsigned int>::max(),
                 seed_value
@@ -880,12 +880,8 @@ TYPED_TEST(HipcubDeviceHistogramMultiEven, MultiEven)
                     }
                 }
             }
-
-            hipcub::TransformInputIterator<sample_type, transform_op<sample_type>, sample_type *> d_input2(
-                d_input,
-                transform_op<sample_type>()
-            );
-
+            rocprim::transform_iterator<sample_type*, transform_op<sample_type>, sample_type>
+                   d_input2(d_input, transform_op<sample_type>());
             size_t temporary_storage_bytes = 0;
             if(rows == 1)
             {
@@ -1101,7 +1097,7 @@ TYPED_TEST(HipcubDeviceHistogramMultiRange, MultiRange)
             SCOPED_TRACE(testing::Message() << "with seed= " << seed_value);
 
             std::vector<unsigned int> channel_seeds = test_utils::get_random_data<unsigned int>(
-                size,
+                std::max(size, static_cast<size_t>(channels)),
                 std::numeric_limits<unsigned int>::min(),
                 std::numeric_limits<unsigned int>::max(),
                 seed_value);
@@ -1214,12 +1210,8 @@ TYPED_TEST(HipcubDeviceHistogramMultiRange, MultiRange)
                     }
                 }
             }
-
-            hipcub::TransformInputIterator<sample_type, transform_op<sample_type>, sample_type *> d_input2(
-                d_input,
-                transform_op<sample_type>()
-            );
-
+            rocprim::transform_iterator<sample_type*, transform_op<sample_type>, sample_type>
+                   d_input2(d_input, transform_op<sample_type>());
             size_t temporary_storage_bytes = 0;
             if(rows == 1)
             {

@@ -1,5 +1,5 @@
+// Copyright (c) Advanced Micro Devices, Inc., or its affiliates.
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2018-2025, Advanced Micro Devices, Inc. All rights reserved.
 
 #pragma once
 
@@ -33,14 +33,13 @@ struct BlockWeightPreshuffleASmemBSmemCRegV1
 
     static constexpr index_t kBlockSize = Problem::kBlockSize;
 
+    static constexpr auto config = BlockPolicy::template GetWarpGemmMWarpNWarp<Problem>();
+    using WG                     = remove_cvref_t<decltype(config.template at<0>())>;
+
     CK_TILE_DEVICE static constexpr auto MakeCBlockTile()
     {
         constexpr index_t MPerBlock = BlockGemmShape::kM;
         constexpr index_t NPerBlock = BlockGemmShape::kN;
-
-        constexpr auto config = BlockPolicy::template GetWarpGemmMWarpNWarp<Problem>();
-
-        using WG = remove_cvref_t<decltype(config.template at<0>())>;
 
         constexpr index_t MWarp = config.template at<1>();
         constexpr index_t NWarp = config.template at<2>();
@@ -74,9 +73,6 @@ struct BlockWeightPreshuffleASmemBSmemCRegV1
         constexpr index_t MPerBlock = BlockGemmShape::kM;
         constexpr index_t KPerBlock = BlockGemmShape::kK;
 
-        constexpr auto config = BlockPolicy::template GetWarpGemmMWarpNWarp<Problem>();
-        using WG              = remove_cvref_t<decltype(config.template at<0>())>;
-
         constexpr index_t MWarp = config.template at<1>();
 
         constexpr index_t MIterPerWarp = MPerBlock / (MWarp * WG::kM);
@@ -92,28 +88,28 @@ struct BlockWeightPreshuffleASmemBSmemCRegV1
         constexpr auto c_warp_y_index_zeros = uniform_sequence_gen_t<CWarpDstr::NDimY, 0>{};
 
         // hot loop:
-        static_for<0, KIterPerWarp, 1>{}([&](auto kIter) {
-            static_for<0, MIterPerWarp, 1>{}([&](auto mIter) {
-                // read A warp tensor from A block window
-                const auto a_warp_tensor = load_tile(a_warp_windows(mIter)(kIter));
+        static_ford<sequence<KIterPerWarp, MIterPerWarp>>{}([&](auto km) {
+            constexpr auto kIter = number<km[number<0>{}]>{};
+            constexpr auto mIter = number<km[number<1>{}]>{};
+            // read A warp tensor from A block window
+            const auto a_warp_tensor = load_tile(a_warp_windows(mIter)(kIter));
 
-                static_for<0, NIterPerWarp, 1>{}([&](auto nIter) {
-                    // read C warp tensor from C block tensor
-                    CWarpTensor c_warp_tensor;
+            static_for<0, NIterPerWarp, 1>{}([&](auto nIter) {
+                // read C warp tensor from C block tensor
+                CWarpTensor c_warp_tensor;
 
-                    c_warp_tensor.get_thread_buffer() = c_block_tensor.get_y_sliced_thread_data(
-                        merge_sequences(sequence<mIter, nIter>{}, c_warp_y_index_zeros),
-                        merge_sequences(sequence<1, 1>{}, c_warp_y_lengths));
+                c_warp_tensor.get_thread_buffer() = c_block_tensor.get_y_sliced_thread_data(
+                    merge_sequences(sequence<mIter, nIter>{}, c_warp_y_index_zeros),
+                    merge_sequences(sequence<1, 1>{}, c_warp_y_lengths));
 
-                    // warp GEMM
-                    WG{}(c_warp_tensor, a_warp_tensor, b_warp_tensor(nIter)(kIter));
+                // warp GEMM
+                WG{}(c_warp_tensor, a_warp_tensor, b_warp_tensor(nIter)(kIter));
 
-                    // write C warp tensor into C block tensor
-                    c_block_tensor.set_y_sliced_thread_data(
-                        merge_sequences(sequence<mIter, nIter>{}, c_warp_y_index_zeros),
-                        merge_sequences(sequence<1, 1>{}, c_warp_y_lengths),
-                        c_warp_tensor.get_thread_buffer());
-                });
+                // write C warp tensor into C block tensor
+                c_block_tensor.set_y_sliced_thread_data(
+                    merge_sequences(sequence<mIter, nIter>{}, c_warp_y_index_zeros),
+                    merge_sequences(sequence<1, 1>{}, c_warp_y_lengths),
+                    c_warp_tensor.get_thread_buffer());
             });
         });
     }

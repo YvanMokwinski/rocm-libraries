@@ -1,5 +1,5 @@
 /* ************************************************************************
- * Copyright (C) 2021-2025 Advanced Micro Devices, Inc. All rights Reserved.
+ * Copyright (C) 2021-2026 Advanced Micro Devices, Inc. All rights Reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -69,6 +69,10 @@ namespace rocsparse
         //
         // Each group treats one row / column
         //
+        static_assert(BLOCKSIZE > 0, "BLOCKSIZE must be positive.");
+        static_assert(BLOCKSIZE % NTHREADS_PER_DOTPRODUCT == 0,
+                      "BLOCKSIZE must be a multiple of NTHREADS_PER_DOTPRODUCT.");
+
         static constexpr rocsparse_int NUM_COEFF         = (BLOCKSIZE / NTHREADS_PER_DOTPRODUCT);
         const I                        local_coeff_index = hipThreadIdx_x / NTHREADS_PER_DOTPRODUCT;
         const I local_thread_index                       = hipThreadIdx_x % NTHREADS_PER_DOTPRODUCT;
@@ -79,8 +83,6 @@ namespace rocsparse
         const J incy = (orderB == rocsparse_order_column)
                            ? ((transB == rocsparse_operation_none) ? 1 : ldb)
                            : ((transB == rocsparse_operation_none) ? ldb : 1);
-
-        __shared__ T s[NUM_COEFF][NTHREADS_PER_DOTPRODUCT];
 
         const I innz = hipBlockIdx_x * NUM_COEFF + local_coeff_index;
         if(innz >= nnz)
@@ -104,25 +106,14 @@ namespace rocsparse
         T sum = static_cast<T>(0);
         for(J k = local_thread_index; k < K; k += NTHREADS_PER_DOTPRODUCT)
         {
-            sum += x[k * incx] * y[k * incy];
-        }
-        s[local_coeff_index][local_thread_index] = sum;
-        __syncthreads();
-
-#pragma unroll
-        for(int ipow2_ = 2; ipow2_ <= NTHREADS_PER_DOTPRODUCT; ipow2_ *= 2)
-        {
-            if(local_thread_index < NTHREADS_PER_DOTPRODUCT / ipow2_)
-            {
-                s[local_coeff_index][local_thread_index]
-                    += s[local_coeff_index][local_thread_index + NTHREADS_PER_DOTPRODUCT / ipow2_];
-            }
-            __syncthreads();
+            sum = rocsparse::fma<T>(x[k * incx], y[k * incy], sum);
         }
 
-        if(local_thread_index == 0)
+        sum = rocsparse::wfreduce_sum<NTHREADS_PER_DOTPRODUCT>(sum);
+
+        if(local_thread_index == NTHREADS_PER_DOTPRODUCT - 1)
         {
-            coo_val[innz] = coo_val[innz] * beta + alpha * s[local_coeff_index][0];
+            coo_val[innz] = rocsparse::fma<T>(beta, coo_val[innz], alpha * sum);
         }
     }
 

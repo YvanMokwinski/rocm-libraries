@@ -1,5 +1,5 @@
+// Copyright (c) Advanced Micro Devices, Inc., or its affiliates.
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2018-2023, Advanced Micro Devices, Inc. All rights reserved.
 
 #pragma once
 
@@ -267,6 +267,8 @@ struct GridwiseGemmMultipleDWelfordFirstHalf_xdl_cshuffle
             e_grid_desc_m_n);
     }
 
+    IS_VALID_COMPILATION_PARAMETER_IMPL(CShuffleDataType)
+
     // block_id to matrix tile idx (m0, n0) mapping are controlled by {M01, N01}
     template <typename Block2ETileMap>
     __host__ __device__ static constexpr bool CheckValidity(const AGridDesc_M_K& a_grid_desc_m_k,
@@ -521,7 +523,11 @@ struct GridwiseGemmMultipleDWelfordFirstHalf_xdl_cshuffle
               lcm_AK1_BK1 <= 4) ||
              (is_same<ABDataType, int8_t>::value && lcm_AK1_BK1 <= 8) ||
              ((is_same<ABDataType, f8_t>::value || is_same<ABDataType, bf8_t>::value) &&
+#if defined(__gfx125__)
+              lcm_AK1_BK1 < 128))
+#else
               lcm_AK1_BK1 < 32))
+#endif
                 ? true
                 : false;
         constexpr auto is_scale_mfma = false;

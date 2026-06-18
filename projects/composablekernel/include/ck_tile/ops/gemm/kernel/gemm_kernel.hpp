@@ -1,5 +1,5 @@
+// Copyright (c) Advanced Micro Devices, Inc., or its affiliates.
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2018-2025, Advanced Micro Devices, Inc. All rights reserved.
 
 #pragma once
 
@@ -15,6 +15,10 @@
 #include "ck_tile/ops/gemm/kernel/universal_gemm_kernel.hpp"
 #include "ck_tile/core/utility/type_traits.hpp"
 
+#if __clang_major__ >= 23
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wlifetime-safety-intra-tu-suggestions"
+#endif
 namespace ck_tile {
 
 /// @brief The GEMM kernel host arguments.
@@ -89,7 +93,7 @@ struct GemmKernel
     /// @brief Specify the layout configurations for A, B, E and D
     using ALayout = remove_cvref_t<typename GemmPipeline::ALayout>;
     using BLayout = remove_cvref_t<typename GemmPipeline::BLayout>;
-    using ELayout = remove_cvref_t<typename GemmPipeline::CLayout>;
+    using CLayout = remove_cvref_t<typename GemmPipeline::CLayout>;
 
     /// @brief  Specify the data type configurations for A, B, E and D
     using ADataType = remove_cvref_t<typename GemmPipeline::ADataType>;
@@ -106,18 +110,21 @@ struct GemmKernel
         !is_detected<is_tuple, BLayout>::value && !is_detected<is_tuple, BDataType>::value,
         "BLayout and BDataType must be scalars. Multiple parameters are not currently supported.");
 
-    /// @brief  C/ELayout and C/EDataType are expected to be scalars, not a tuple.
-    static_assert(!is_detected<is_tuple, ELayout>::value &&
+    /// @brief  C/CLayout and C/EDataType are expected to be scalars, not a tuple.
+    static_assert(!is_detected<is_tuple, CLayout>::value &&
                       !is_detected<is_tuple, EDataType>::value,
-                  "C/ELayout and C/EDataType must be scalars.");
+                  "C/CLayout and C/EDataType must be scalars.");
 
     static constexpr index_t NumATensor = 1;
     static constexpr index_t NumBTensor = 1;
+    static constexpr index_t kBlockSize = UniversalGemmKernel::kBlockSize;
 
     CK_TILE_HOST static auto GetName() -> const std::string
     {
         return UniversalGemmKernel::GetName();
     }
+
+    CK_TILE_HOST static constexpr auto ClusterSize() { return UniversalGemmKernel::ClusterSize(); }
 
     CK_TILE_HOST static constexpr auto GridSize(index_t M, index_t N, index_t KBatch) -> dim3
     {
@@ -167,3 +174,7 @@ struct GemmKernel
     }
 };
 } // namespace ck_tile
+
+#if __clang_major__ >= 23
+#pragma clang diagnostic pop
+#endif
