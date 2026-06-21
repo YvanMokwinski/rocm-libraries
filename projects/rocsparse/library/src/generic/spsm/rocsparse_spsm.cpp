@@ -32,8 +32,8 @@
 #include "rocsparse_handle.hpp"
 #include "rocsparse_utility.hpp"
 
-#include "rocsparse_coosm.hpp"
-#include "rocsparse_csrsm.hpp"
+#include "../../level3/coosm/rocsparse_coosm.hpp"
+#include "../../level3/csrsm/rocsparse_csrsm.hpp"
 
 // LCOV_EXCL_START
 template <>

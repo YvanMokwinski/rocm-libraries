@@ -397,24 +397,24 @@ set(rocsparse_source
   src/level3/rocsparse_coomm_template_segmented.cpp
   src/level3/rocsparse_coomm_template_segmented_atomic.cpp
   src/level3/rocsparse_spmm.cpp
-  src/level3/rocsparse_csrsm.cpp
-  src/level3/rocsparse_csrsm_buffer_size_impl.cpp
-  src/level3/rocsparse_csrsm_analysis_impl.cpp
-  src/level3/rocsparse_csrsm_solve_impl.cpp
-  src/level3/rocsparse_csrsm_buffer_size.cpp
-  src/level3/rocsparse_csrsm_analysis.cpp
-  src/level3/rocsparse_csrsm_solve.cpp
-  src/level3/rocsparse_coosm_buffer_size.cpp
-  src/level3/rocsparse_coosm_analysis.cpp
-  src/level3/rocsparse_coosm.cpp
-  src/level3/rocsparse_coosm_buffer_size_impl.cpp
-  src/level3/rocsparse_coosm_analysis_impl.cpp
-  src/level3/rocsparse_coosm_impl.cpp
-  src/level3/rocsparse_bsrsm.cpp
-  src/level3/rocsparse_bsrsm_buffer_size.cpp
-  src/level3/rocsparse_bsrsm_analysis.cpp
-  src/level3/rocsparse_bsrsm_solve.cpp
-  src/level3/rocsparse_bsrsm_template_large.cpp
+  src/level3/csrsm/rocsparse_csrsm.cpp
+  src/level3/csrsm/rocsparse_csrsm_buffer_size_impl.cpp
+  src/level3/csrsm/rocsparse_csrsm_analysis_impl.cpp
+  src/level3/csrsm/rocsparse_csrsm_solve_impl.cpp
+  src/level3/csrsm/rocsparse_csrsm_buffer_size.cpp
+  src/level3/csrsm/rocsparse_csrsm_analysis.cpp
+  src/level3/csrsm/rocsparse_csrsm_solve.cpp
+  src/level3/coosm/rocsparse_coosm_buffer_size.cpp
+  src/level3/coosm/rocsparse_coosm_analysis.cpp
+  src/level3/coosm/rocsparse_coosm.cpp
+  src/level3/coosm/rocsparse_coosm_buffer_size_impl.cpp
+  src/level3/coosm/rocsparse_coosm_analysis_impl.cpp
+  src/level3/coosm/rocsparse_coosm_impl.cpp
+  src/level3/bsrsm/rocsparse_bsrsm.cpp
+  src/level3/bsrsm/rocsparse_bsrsm_buffer_size.cpp
+  src/level3/bsrsm/rocsparse_bsrsm_analysis.cpp
+  src/level3/bsrsm/rocsparse_bsrsm_solve.cpp
+  src/level3/bsrsm/rocsparse_bsrsm_template_large.cpp
   src/level3/rocsparse_gemmi.cpp
   src/level3/rocsparse_sddmm.cpp
   src/level3/rocsparse_sddmm_coo.cpp
@@ -422,9 +422,9 @@ set(rocsparse_source
   src/level3/rocsparse_sddmm_csr.cpp
   src/level3/rocsparse_sddmm_csc.cpp
   src/level3/rocsparse_sddmm_ell.cpp
-  src/level3/rocsparse_spsm.cpp
-  src/level3/rocsparse_sptrsm.cpp
-  src/level3/rocsparse_sptrsm_descr.cpp
+  src/generic/spsm/rocsparse_spsm.cpp
+  src/generic/sptrsm/rocsparse_sptrsm.cpp
+  src/generic/sptrsm/rocsparse_sptrsm_descr.cpp
 
 # Extra
   src/extra/rocsparse_bsrgeam.cpp

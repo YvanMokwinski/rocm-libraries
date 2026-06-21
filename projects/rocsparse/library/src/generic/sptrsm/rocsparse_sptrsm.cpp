@@ -31,8 +31,8 @@
 #include "../conversion/rocsparse_convert_scalar.hpp"
 #include "internal/level3/rocsparse_csrsm.h"
 #include "rocsparse_common.h"
-#include "rocsparse_coosm.hpp"
-#include "rocsparse_csrsm.hpp"
+#include "../../level3/coosm/rocsparse_coosm.hpp"
+#include "../../level3/csrsm/rocsparse_csrsm.hpp"
 #include "rocsparse_sptrsm_descr.hpp"
 
 template <>

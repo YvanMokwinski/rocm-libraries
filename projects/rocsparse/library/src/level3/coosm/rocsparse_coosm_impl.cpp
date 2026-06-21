@@ -24,7 +24,7 @@
 
 #include "rocsparse_control.hpp"
 #include "rocsparse_coosm.hpp"
-#include "rocsparse_csrsm.hpp"
+#include "../csrsm/rocsparse_csrsm.hpp"
 #include "rocsparse_utility.hpp"
 
 #include "../conversion/rocsparse_coo2csr.hpp"
